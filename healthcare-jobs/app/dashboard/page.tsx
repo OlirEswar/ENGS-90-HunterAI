@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMatchedJobs } from '@/lib/api';
 import { Job } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -13,6 +14,32 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const checkAuthAndResume = async () => {
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      // Check if user has uploaded a resume
+      const { data: candidateData } = await supabase
+        .from('u_candidates')
+        .select('resume')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!candidateData?.resume) {
+        // No resume uploaded, redirect to upload page
+        router.push('/upload-resume');
+        return;
+      }
+
+      // User is authenticated and has resume, fetch jobs
+      fetchJobs();
+    };
+
     const fetchJobs = async () => {
       try {
         const matchedJobs = await getMatchedJobs('1');
@@ -24,8 +51,8 @@ export default function DashboardPage() {
       }
     };
 
-    fetchJobs();
-  }, []);
+    checkAuthAndResume();
+  }, [router]);
 
   const handleSignOut = () => {
     router.push('/');

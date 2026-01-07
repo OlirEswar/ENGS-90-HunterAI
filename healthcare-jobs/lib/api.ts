@@ -1,4 +1,5 @@
 import { Job, UserProfile } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 // Dummy data for jobs
 export const dummyJobs: Job[] = [
@@ -172,31 +173,50 @@ export const dummyJobs: Job[] = [
   }
 ];
 
-// Placeholder API calls
+// API calls using Supabase
 export async function loginUser(email: string, password: string): Promise<{ success: boolean; user?: UserProfile }> {
-  // Placeholder API call - will fail but that's expected
   try {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
-    return await response.json();
-  } catch (error) {
-    // Ignore error and return mock success
-    console.log('API call failed (expected):', error);
-    return {
-      success: true,
-      user: {
-        id: '1',
-        name: 'John Doe',
-        email: email,
-        location: 'New York, NY',
-        desiredSalary: '$80,000+',
-        willingToRelocate: false,
-        preferredDepartments: ['Nursing']
+
+    if (error) {
+      console.error('Login error:', error);
+      return { success: false };
+    }
+
+    if (data.user) {
+      // Fetch user profile from u_candidates
+      const { data: candidateData, error: candidateError } = await supabase
+        .from('u_candidates')
+        .select('*')
+        .eq('user_id', data.user.id)
+        .single();
+
+      if (candidateError || !candidateData) {
+        console.error('Error fetching candidate data:', candidateError);
+        return { success: false };
       }
-    };
+
+      return {
+        success: true,
+        user: {
+          id: candidateData.user_id,
+          name: candidateData.name,
+          email: candidateData.email,
+          location: '',
+          desiredSalary: '',
+          willingToRelocate: false,
+          preferredDepartments: []
+        }
+      };
+    }
+
+    return { success: false };
+  } catch (error) {
+    console.error('Unexpected login error:', error);
+    return { success: false };
   }
 }
 
@@ -228,19 +248,43 @@ export async function registerUser(data: Partial<UserProfile>): Promise<{ succes
 
 export async function uploadResume(file: File): Promise<{ success: boolean; url?: string }> {
   try {
-    const formData = new FormData();
-    formData.append('resume', file);
-    const response = await fetch('/api/upload/resume', {
-      method: 'POST',
-      body: formData
-    });
-    return await response.json();
-  } catch (error) {
-    console.log('API call failed (expected):', error);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false };
+    }
+
+    // Upload file to Supabase Storage with organized path: userId/resume.pdf
+    const fileName = `${user.id}/resume.pdf`;
+
+    const { error } = await supabase.storage
+      .from('resumes')
+      .upload(fileName, file, {
+        upsert: true,
+        contentType: 'application/pdf'
+      });
+
+    if (error) {
+      console.error('Upload error:', error);
+      return { success: false };
+    }
+
+    // Store the file path (not public URL since bucket is private)
+    const resumePath = fileName;
+
+    // Update candidate record with resume path
+    await supabase
+      .from('u_candidates')
+      .update({ resume: resumePath })
+      .eq('user_id', user.id);
+
     return {
       success: true,
-      url: '/uploads/resume.pdf'
+      url: resumePath
     };
+  } catch (error) {
+    console.error('Unexpected upload error:', error);
+    return { success: false };
   }
 }
 

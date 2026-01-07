@@ -3,25 +3,37 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { loginUser } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
 
     try {
-      const result = await loginUser(email, password);
-      if (result.success) {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        setError(signInError.message);
+        return;
+      }
+
+      if (data.user) {
         router.push('/dashboard');
       }
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -44,6 +56,12 @@ export default function LoginPage() {
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
                 Email Address
@@ -96,8 +114,8 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-slate-600">
               Don&apos;t have an account?{' '}
-              <Link href="/signup/resume" className="text-sky-600 hover:text-sky-700 font-semibold">
-                Get Started
+              <Link href="/signup" className="text-sky-600 hover:text-sky-700 font-semibold">
+                Sign Up
               </Link>
             </p>
           </div>

@@ -25,10 +25,10 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link
-              href="/signup/resume"
+              href="/signup"
               className="group relative w-full sm:w-auto overflow-hidden rounded-xl bg-gradient-to-r from-sky-500 to-teal-500 px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105"
             >
-              <span className="relative z-10">Get Started</span>
+              <span className="relative z-10">Sign Up</span>
               <div className="absolute inset-0 bg-gradient-to-r from-sky-600 to-teal-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
             </Link>
 
@@ -36,7 +36,7 @@ export default function Home() {
               href="/login"
               className="w-full sm:w-auto rounded-xl border-2 border-sky-500 bg-white px-8 py-4 text-lg font-semibold text-sky-600 shadow-md transition-all duration-300 hover:bg-sky-50 hover:shadow-lg hover:scale-105"
             >
-              Sign In
+              Log In
             </Link>
           </div>
 
