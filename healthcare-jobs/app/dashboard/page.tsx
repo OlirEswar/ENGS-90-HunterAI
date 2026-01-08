@@ -390,8 +390,47 @@ export default function DashboardPage() {
 
     const fetchJobs = async () => {
       try {
-        const matchedJobs = await getMatchedJobs('1');
-        setJobs(matchedJobs);
+        // Fetch matched jobs for the authenticated user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: matchesData, error: matchesError } = await supabase
+          .from('matches')
+          .select(`
+            job_id,
+            jobs (
+              job_id,
+              job_name,
+              company_name,
+              city,
+              state,
+              hourly_wage_minimum,
+              hourly_wage_maximum,
+              job_description,
+              job_requirements
+            )
+          `)
+          .eq('user_id', user.id);
+
+        if (matchesError) {
+          console.error('Error fetching matches:', matchesError);
+          return;
+        }
+
+        // Transform the data to match the Job interface
+        const transformedJobs: Job[] = matchesData.map((match: any) => ({
+          id: match.jobs.job_id,
+          title: match.jobs.job_name,
+          company: match.jobs.company_name,
+          city: match.jobs.city,
+          state: match.jobs.state,
+          hourlyWageMin: parseFloat(match.jobs.hourly_wage_minimum),
+          hourlyWageMax: parseFloat(match.jobs.hourly_wage_maximum),
+          description: match.jobs.job_description,
+          requirements: match.jobs.job_requirements
+        }));
+
+        setJobs(transformedJobs);
       } catch (error) {
         console.error('Error fetching jobs:', error);
       } finally {
@@ -530,20 +569,17 @@ export default function DashboardPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                           </svg>
-                          {job.location}
+                          {job.city}, {job.state}
                         </div>
                         <div className="flex items-center gap-2 text-sm text-slate-600">
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          {job.salary}
+                          ${job.hourlyWageMin}/hr - ${job.hourlyWageMax}/hr
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
-                          {job.department}
-                        </span>
+                      <div className="flex items-center justify-end">
                         <span className="text-sky-600 font-medium text-sm group-hover:underline">
                           View Details →
                         </span>
@@ -591,17 +627,14 @@ export default function DashboardPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  {selectedJob.location}
+                  {selectedJob.city}, {selectedJob.state}
                 </div>
                 <div className="flex items-center gap-2 text-slate-700">
                   <svg className="h-5 w-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  {selectedJob.salary}
+                  ${selectedJob.hourlyWageMin}/hr - ${selectedJob.hourlyWageMax}/hr
                 </div>
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-teal-100 text-teal-700">
-                  {selectedJob.department}
-                </span>
               </div>
 
               <div>
@@ -618,20 +651,6 @@ export default function DashboardPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       {req}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800 mb-3">Benefits</h3>
-                <ul className="space-y-2">
-                  {selectedJob.benefits.map((benefit, index) => (
-                    <li key={index} className="flex items-start gap-2 text-slate-600">
-                      <svg className="h-5 w-5 text-teal-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      {benefit}
                     </li>
                   ))}
                 </ul>

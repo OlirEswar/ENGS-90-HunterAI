@@ -2,12 +2,12 @@ export interface Job {
   id: string;
   title: string;
   company: string;
-  location: string;
-  salary: string;
+  city: string;
+  state: string;
+  hourlyWageMin: number;
+  hourlyWageMax: number;
   description: string;
   requirements: string[];
-  benefits: string[];
-  department: string;
 }
 
 export interface UserProfile {
