@@ -656,12 +656,9 @@ export default function DashboardPage() {
                 </ul>
               </div>
 
-              <div className="flex gap-4 pt-4">
-                <button className="flex-1 bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="pt-4">
+                <button className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                   Apply Now
-                </button>
-                <button className="px-6 py-3 rounded-lg border-2 border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition">
-                  Save Job
                 </button>
               </div>
             </div>
