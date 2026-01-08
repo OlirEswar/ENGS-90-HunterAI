@@ -254,13 +254,29 @@ export async function uploadResume(file: File): Promise<{ success: boolean; url?
       return { success: false };
     }
 
-    // Upload file to Supabase Storage with organized path: userId/resume.pdf
-    const fileName = `${user.id}/resume.pdf`;
+    // Preserve original filename, sanitize it for storage
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${user.id}/${sanitizedFileName}`;
 
+    // First, check if there's an existing resume to delete
+    const { data: candidateData } = await supabase
+      .from('u_candidates')
+      .select('resume')
+      .eq('user_id', user.id)
+      .single();
+
+    // Delete old resume if it exists
+    if (candidateData?.resume) {
+      await supabase.storage
+        .from('resumes')
+        .remove([candidateData.resume]);
+    }
+
+    // Upload new file
     const { error } = await supabase.storage
       .from('resumes')
       .upload(fileName, file, {
-        upsert: true,
+        upsert: false, // Changed to false since we're deleting old file first
         contentType: 'application/pdf'
       });
 

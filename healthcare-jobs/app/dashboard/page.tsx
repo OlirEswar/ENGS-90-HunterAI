@@ -142,11 +142,14 @@ function ProfileTab({
         throw error;
       }
 
+      // Extract the original filename from the path
+      const originalFileName = userProfile.resumePath.split('/').pop() || 'resume.pdf';
+
       // Create download link
       const url = window.URL.createObjectURL(data);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'resume.pdf';
+      link.download = originalFileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -237,7 +240,7 @@ function ProfileTab({
                   </svg>
                   <div>
                     <p className="font-medium text-slate-800">Current Resume</p>
-                    <p className="text-sm text-slate-500">resume.pdf</p>
+                    <p className="text-sm text-slate-500">{userProfile.resumePath.split('/').pop()}</p>
                   </div>
                 </div>
                 <button
