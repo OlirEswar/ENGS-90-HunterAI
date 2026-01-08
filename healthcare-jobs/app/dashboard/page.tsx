@@ -173,7 +173,7 @@ function ProfileTab({
   };
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <h2 className="text-3xl font-bold text-slate-800 mb-2">Your Profile</h2>
         <p className="text-slate-600">Update your personal information and resume</p>
