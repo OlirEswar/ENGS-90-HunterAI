@@ -69,11 +69,23 @@ function ProfileTab({
         }
       }
 
-      // Update local state
+      // Fetch updated profile data from database to get the new resume path
+      const { data: updatedData, error: fetchError } = await supabase
+        .from('u_candidates')
+        .select('name, email, resume, user_id')
+        .eq('user_id', userProfile.userId)
+        .single();
+
+      if (fetchError || !updatedData) {
+        throw new Error('Failed to fetch updated profile');
+      }
+
+      // Update local state with fresh data from database
       setUserProfile({
-        ...userProfile,
-        name: fullName,
-        email: formData.email
+        name: updatedData.name,
+        email: updatedData.email,
+        resumePath: updatedData.resume,
+        userId: updatedData.user_id
       });
 
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
