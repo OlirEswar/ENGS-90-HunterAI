@@ -409,7 +409,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-teal-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-slate-200">
+      <header className="fixed top-0 left-0 right-0 bg-white shadow-sm border-b border-slate-200 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-teal-500 shadow-md">
@@ -431,15 +431,14 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="flex max-w-7xl mx-auto">
-        {/* Sidebar */}
-        <aside
-          className={`${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 transition-transform duration-300 ease-in-out lg:block`}
-        >
-          <div className="h-full flex flex-col p-6 mt-16 lg:mt-0">
-            <nav className="flex-1 space-y-2">
+      {/* Sidebar */}
+      <aside
+        className={`${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0 fixed top-0 lg:top-[73px] bottom-0 left-0 z-40 w-64 bg-white border-r border-slate-200 transition-transform duration-300 ease-in-out`}
+      >
+        <div className="h-full flex flex-col pt-20 lg:pt-6">
+          <nav className="flex-1 space-y-2 px-6">
               <button
                 onClick={() => setActiveTab('matched-jobs')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium ${
@@ -471,7 +470,7 @@ export default function DashboardPage() {
 
             <button
               onClick={handleSignOut}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 font-medium mt-auto"
+              className="w-full flex items-center gap-3 px-4 py-3 mx-6 mb-6 rounded-lg text-red-600 hover:bg-red-50 font-medium"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -481,16 +480,17 @@ export default function DashboardPage() {
           </div>
         </aside>
 
-        {/* Overlay for mobile */}
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
+      {/* Overlay for mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-        {/* Main Content */}
-        <main className="flex-1 p-6 lg:p-8">
+      {/* Main Content */}
+      <div className="lg:ml-64 min-h-screen pt-[73px]">
+        <main className="p-6 lg:p-8">
           {activeTab === 'matched-jobs' ? (
             <>
               <div className="mb-6">
