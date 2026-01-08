@@ -45,9 +45,16 @@ export default function SignUpPage() {
 
     try {
       // Create auth user with Supabase Auth
+      // Email confirmation is disabled, so user will be auto-signed in
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/upload-resume`,
+          data: {
+            name: `${formData.firstName} ${formData.lastName}`,
+          },
+        },
       });
 
       if (signUpError) {
@@ -55,26 +62,34 @@ export default function SignUpPage() {
         return;
       }
 
-      if (authData.user) {
-        // Insert candidate data into u_candidates table
-        const { error: insertError } = await supabase
-          .from('u_candidates')
-          .insert({
-            user_id: authData.user.id,
-            email: formData.email,
-            name: `${formData.firstName} ${formData.lastName}`,
-            resume: null,
-          });
-
-        if (insertError) {
-          console.error('Error inserting candidate data:', insertError);
-          setError('Account created but failed to save profile. Please contact support.');
-          return;
-        }
-
-        // Success! Redirect to resume upload page
-        router.push('/upload-resume');
+      // Check if user was actually created or if this is a repeat signup
+      if (!authData.user) {
+        setError('Unable to create account. Please try again.');
+        return;
       }
+
+      // Check if the user has a session (means they're signed in)
+      if (!authData.session) {
+        setError('Email already registered. Please sign in instead.');
+        return;
+      }
+
+      // At this point, the database trigger has automatically created the candidate record
+      // Update it with the full name
+      const { error: updateError } = await supabase
+        .from('u_candidates')
+        .update({
+          name: `${formData.firstName} ${formData.lastName}`,
+        })
+        .eq('user_id', authData.user.id);
+
+      if (updateError) {
+        console.error('Error updating candidate name:', updateError);
+        // Not a critical error - the account was created, just continue
+      }
+
+      // Success! Redirect to resume upload page
+      router.push('/upload-resume');
     } catch (err) {
       console.error('Signup error:', err);
       setError('An unexpected error occurred. Please try again.');
