@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { uploadResume } from '@/lib/api';
-import { Job } from '@/types';
+import { Job, Question, CandidateAnswer } from '@/types';
 import { supabase } from '@/lib/supabase';
 
 function ProfileTab({
@@ -354,6 +354,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'matched-jobs' | 'profile'>('matched-jobs');
   const [userProfile, setUserProfile] = useState<{name: string; email: string; resumePath: string; userId: string} | null>(null);
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [answers, setAnswers] = useState<{[key: string]: string}>({});
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const checkAuthAndResume = async () => {
@@ -410,7 +414,10 @@ export default function DashboardPage() {
               hourly_wage_minimum,
               hourly_wage_maximum,
               job_description,
-              job_requirements
+              job_requirements,
+              questionnaires (
+                questionnaire_id
+              )
             )
           `)
           .eq('user_id', user.id);
@@ -430,7 +437,9 @@ export default function DashboardPage() {
           hourlyWageMin: parseFloat(match.jobs.hourly_wage_minimum),
           hourlyWageMax: parseFloat(match.jobs.hourly_wage_maximum),
           description: match.jobs.job_description,
-          requirements: match.jobs.job_requirements
+          requirements: match.jobs.job_requirements,
+          questionnaireId: match.jobs.questionnaires?.[0]?.questionnaire_id || null,
+          questionnaireSent: match.questionnaire_sent
         }));
 
         // Split jobs based on questionnaire_sent status
@@ -461,6 +470,91 @@ export default function DashboardPage() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/');
+  };
+
+  const handleTakeQuestionnaire = async (job: Job) => {
+    if (!job.questionnaireId || !userProfile) return;
+
+    try {
+      // Fetch questions for this questionnaire
+      const { data: questionsData, error: questionsError } = await supabase
+        .from('job_questions')
+        .select('*')
+        .eq('questionnaire_id', job.questionnaireId)
+        .order('position');
+
+      if (questionsError) {
+        console.error('Error fetching questions:', questionsError);
+        return;
+      }
+
+      setQuestions(questionsData || []);
+
+      // Fetch existing answers if any
+      const { data: existingAnswers, error: answersError } = await supabase
+        .from('candidate_answers')
+        .select('*')
+        .eq('candidate_id', userProfile.userId)
+        .in('question_id', questionsData.map(q => q.question_id));
+
+      if (answersError) {
+        console.error('Error fetching existing answers:', answersError);
+      }
+
+      // Populate answers state with existing answers
+      const answersMap: {[key: string]: string} = {};
+      if (existingAnswers) {
+        existingAnswers.forEach((answer: any) => {
+          answersMap[answer.question_id] = answer.answer;
+        });
+      }
+      setAnswers(answersMap);
+      setShowQuestionnaire(true);
+    } catch (error) {
+      console.error('Error loading questionnaire:', error);
+    }
+  };
+
+  const handleSubmitQuestionnaire = async () => {
+    if (!selectedJob || !userProfile) return;
+
+    setSubmitting(true);
+    try {
+      // Prepare answers for insertion/update
+      const answerRecords = questions.map(question => ({
+        candidate_id: userProfile.userId,
+        question_id: question.question_id,
+        answer: answers[question.question_id] || ''
+      }));
+
+      // Delete existing answers first
+      await supabase
+        .from('candidate_answers')
+        .delete()
+        .eq('candidate_id', userProfile.userId)
+        .in('question_id', questions.map(q => q.question_id));
+
+      // Insert new answers
+      const { error: insertError } = await supabase
+        .from('candidate_answers')
+        .insert(answerRecords);
+
+      if (insertError) {
+        console.error('Error saving answers:', insertError);
+        alert('Failed to save answers. Please try again.');
+        return;
+      }
+
+      alert('Questionnaire submitted successfully!');
+      setShowQuestionnaire(false);
+      setSelectedJob(null);
+      setAnswers({});
+    } catch (error) {
+      console.error('Error submitting questionnaire:', error);
+      alert('Failed to submit questionnaire. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -691,7 +785,11 @@ export default function DashboardPage() {
       {selectedJob && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-          onClick={() => setSelectedJob(null)}
+          onClick={() => {
+            setSelectedJob(null);
+            setShowQuestionnaire(false);
+            setAnswers({});
+          }}
         >
           <div
             className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
@@ -703,7 +801,11 @@ export default function DashboardPage() {
                 <p className="text-lg text-slate-600">{selectedJob.company}</p>
               </div>
               <button
-                onClick={() => setSelectedJob(null)}
+                onClick={() => {
+                  setSelectedJob(null);
+                  setShowQuestionnaire(false);
+                  setAnswers({});
+                }}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <svg className="h-6 w-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -713,46 +815,102 @@ export default function DashboardPage() {
             </div>
 
             <div className="p-6 space-y-6">
-              <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <svg className="h-5 w-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  {selectedJob.city}, {selectedJob.state}
-                </div>
-                <div className="flex items-center gap-2 text-slate-700">
-                  <svg className="h-5 w-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  ${selectedJob.hourlyWageMin}/hr - ${selectedJob.hourlyWageMax}/hr
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800 mb-3">Job Description</h3>
-                <p className="text-slate-600 leading-relaxed">{selectedJob.description}</p>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800 mb-3">Requirements</h3>
-                <ul className="space-y-2">
-                  {selectedJob.requirements.map((req, index) => (
-                    <li key={index} className="flex items-start gap-2 text-slate-600">
-                      <svg className="h-5 w-5 text-sky-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              {!showQuestionnaire ? (
+                <>
+                  <div className="flex flex-wrap gap-4">
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <svg className="h-5 w-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
-                      {req}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                      {selectedJob.city}, {selectedJob.state}
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <svg className="h-5 w-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      ${selectedJob.hourlyWageMin}/hr - ${selectedJob.hourlyWageMax}/hr
+                    </div>
+                  </div>
 
-              <div className="pt-4">
-                <button className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                  Apply Now
-                </button>
-              </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800 mb-3">Job Description</h3>
+                    <p className="text-slate-600 leading-relaxed">{selectedJob.description}</p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800 mb-3">Requirements</h3>
+                    <ul className="space-y-2">
+                      {selectedJob.requirements.map((req, index) => (
+                        <li key={index} className="flex items-start gap-2 text-slate-600">
+                          <svg className="h-5 w-5 text-sky-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {req}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="pt-4">
+                    {selectedJob.questionnaireSent && selectedJob.questionnaireId ? (
+                      <button
+                        onClick={() => handleTakeQuestionnaire(selectedJob)}
+                        className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                      >
+                        Take Questionnaire
+                      </button>
+                    ) : (
+                      <button className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                        Apply Now
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Questionnaire</h3>
+                    <p className="text-slate-600 mb-6">Please answer the following questions to help us better understand your qualifications.</p>
+
+                    <div className="space-y-6">
+                      {questions.map((question, index) => (
+                        <div key={question.question_id}>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            {index + 1}. {question.prompt}
+                          </label>
+                          <textarea
+                            value={answers[question.question_id] || ''}
+                            onChange={(e) => setAnswers({
+                              ...answers,
+                              [question.question_id]: e.target.value
+                            })}
+                            rows={4}
+                            className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition resize-none"
+                            placeholder="Type your answer here..."
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => setShowQuestionnaire(false)}
+                      className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-lg font-semibold hover:bg-slate-300 transition-all duration-300"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleSubmitQuestionnaire}
+                      disabled={submitting}
+                      className="flex-1 bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    >
+                      {submitting ? 'Submitting...' : 'Submit'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

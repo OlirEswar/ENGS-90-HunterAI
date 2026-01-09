@@ -8,6 +8,22 @@ export interface Job {
   hourlyWageMax: number;
   description: string;
   requirements: string[];
+  questionnaireId?: string;
+  questionnaireSent?: boolean;
+}
+
+export interface Question {
+  question_id: string;
+  questionnaire_id: string;
+  position: number;
+  prompt: string;
+}
+
+export interface CandidateAnswer {
+  answer_id?: string;
+  candidate_id: string;
+  question_id: string;
+  answer: string;
 }
 
 export interface UserProfile {
