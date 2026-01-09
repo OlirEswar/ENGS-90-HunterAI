@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HealthCare Connect - Find Your Perfect Healthcare Career",
-  description: "Connect with top healthcare employers and find your dream job in nursing, medical, therapy, and other healthcare professions.",
+  title: "Health Care Hunter - Find Your Perfect Healthcare Career",
+  description: "Hunt down your ideal healthcare job. Connect with top healthcare employers and find your dream job in nursing, medical, therapy, and other healthcare professions.",
 };
 
 export default function RootLayout({
