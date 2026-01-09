@@ -355,9 +355,11 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'matched-jobs' | 'profile'>('matched-jobs');
   const [userProfile, setUserProfile] = useState<{name: string; email: string; resumePath: string; userId: string} | null>(null);
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [showCongratulations, setShowCongratulations] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<{[key: string]: string}>({});
   const [submitting, setSubmitting] = useState(false);
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left');
 
   useEffect(() => {
     const checkAuthAndResume = async () => {
@@ -509,6 +511,7 @@ export default function DashboardPage() {
         });
       }
       setAnswers(answersMap);
+      setSlideDirection('left');
       setShowQuestionnaire(true);
     } catch (error) {
       console.error('Error loading questionnaire:', error);
@@ -528,7 +531,7 @@ export default function DashboardPage() {
       }));
 
       // Delete existing answers first
-      await supabase
+      const { error: deleteError } = await supabase
         .from('candidate_answers')
         .delete()
         .eq('candidate_id', userProfile.userId)
@@ -545,16 +548,27 @@ export default function DashboardPage() {
         return;
       }
 
-      alert('Questionnaire submitted successfully!');
-      setShowQuestionnaire(false);
-      setSelectedJob(null);
-      setAnswers({});
+      // Successfully saved - show congratulations screen
+      setSlideDirection('left');
+      setShowCongratulations(true);
     } catch (error) {
       console.error('Error submitting questionnaire:', error);
       alert('Failed to submit questionnaire. Please try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleBackToJobDetails = () => {
+    setSlideDirection('right');
+    setShowQuestionnaire(false);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedJob(null);
+    setShowQuestionnaire(false);
+    setShowCongratulations(false);
+    setAnswers({});
   };
 
   return (
@@ -785,27 +799,19 @@ export default function DashboardPage() {
       {selectedJob && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-          onClick={() => {
-            setSelectedJob(null);
-            setShowQuestionnaire(false);
-            setAnswers({});
-          }}
+          onClick={handleCloseModal}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-start justify-between">
+            <div className="flex-shrink-0 bg-white border-b border-slate-200 p-6 flex items-start justify-between z-10">
               <div>
                 <h2 className="text-2xl font-bold text-slate-800 mb-1">{selectedJob.title}</h2>
                 <p className="text-lg text-slate-600">{selectedJob.company}</p>
               </div>
               <button
-                onClick={() => {
-                  setSelectedJob(null);
-                  setShowQuestionnaire(false);
-                  setAnswers({});
-                }}
+                onClick={handleCloseModal}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <svg className="h-6 w-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -814,45 +820,56 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {!showQuestionnaire ? (
-                <>
-                  <div className="flex flex-wrap gap-4">
-                    <div className="flex items-center gap-2 text-slate-700">
-                      <svg className="h-5 w-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      {selectedJob.city}, {selectedJob.state}
+            <div className="relative flex-1 overflow-hidden">
+              {/* Job Details View */}
+              <div
+                className={`absolute inset-0 transition-transform duration-500 ease-in-out ${
+                  showQuestionnaire || showCongratulations
+                    ? slideDirection === 'left'
+                      ? '-translate-x-full'
+                      : 'translate-x-full'
+                    : 'translate-x-0'
+                }`}
+              >
+                <div className="h-full flex flex-col">
+                  <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+                    <div className="flex flex-wrap gap-4">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <svg className="h-5 w-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        {selectedJob.city}, {selectedJob.state}
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <svg className="h-5 w-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        ${selectedJob.hourlyWageMin}/hr - ${selectedJob.hourlyWageMax}/hr
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-700">
-                      <svg className="h-5 w-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      ${selectedJob.hourlyWageMin}/hr - ${selectedJob.hourlyWageMax}/hr
+
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-800 mb-3">Job Description</h3>
+                      <p className="text-slate-600 leading-relaxed">{selectedJob.description}</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-800 mb-3">Requirements</h3>
+                      <ul className="space-y-2">
+                        {selectedJob.requirements.map((req, index) => (
+                          <li key={index} className="flex items-start gap-2 text-slate-600">
+                            <svg className="h-5 w-5 text-sky-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {req}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-800 mb-3">Job Description</h3>
-                    <p className="text-slate-600 leading-relaxed">{selectedJob.description}</p>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-800 mb-3">Requirements</h3>
-                    <ul className="space-y-2">
-                      {selectedJob.requirements.map((req, index) => (
-                        <li key={index} className="flex items-start gap-2 text-slate-600">
-                          <svg className="h-5 w-5 text-sky-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          {req}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="pt-4">
+                  <div className="flex-shrink-0 p-6 pt-4 border-t border-slate-100">
                     {selectedJob.questionnaireSent && selectedJob.questionnaireId ? (
                       <button
                         onClick={() => handleTakeQuestionnaire(selectedJob)}
@@ -866,51 +883,106 @@ export default function DashboardPage() {
                       </button>
                     )}
                   </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Questionnaire</h3>
-                    <p className="text-slate-600 mb-6">Please answer the following questions to help us better understand your qualifications.</p>
+                </div>
+              </div>
 
-                    <div className="space-y-6">
-                      {questions.map((question, index) => (
-                        <div key={question.question_id}>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">
-                            {index + 1}. {question.prompt}
-                          </label>
-                          <textarea
-                            value={answers[question.question_id] || ''}
-                            onChange={(e) => setAnswers({
-                              ...answers,
-                              [question.question_id]: e.target.value
-                            })}
-                            rows={4}
-                            className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition resize-none"
-                            placeholder="Type your answer here..."
-                          />
-                        </div>
-                      ))}
+              {/* Questionnaire View */}
+              <div
+                className={`absolute inset-0 transition-transform duration-500 ease-in-out ${
+                  showQuestionnaire && !showCongratulations
+                    ? 'translate-x-0'
+                    : showCongratulations
+                    ? '-translate-x-full'
+                    : 'translate-x-full'
+                }`}
+              >
+                <div className="h-full flex flex-col">
+                  <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-800 mb-4">Questionnaire</h3>
+                      <p className="text-slate-600 mb-6">Please answer the following questions to help us better understand your qualifications.</p>
+
+                      <div className="space-y-6">
+                        {questions.map((question, index) => (
+                          <div key={question.question_id}>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                              {index + 1}. {question.prompt}
+                            </label>
+                            <textarea
+                              value={answers[question.question_id] || ''}
+                              onChange={(e) => setAnswers({
+                                ...answers,
+                                [question.question_id]: e.target.value
+                              })}
+                              rows={4}
+                              className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition resize-none"
+                              placeholder="Type your answer here..."
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex gap-3 pt-4">
+                  <div className="flex-shrink-0 p-6 pt-4 border-t border-slate-100">
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleBackToJobDetails}
+                        className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-lg font-semibold hover:bg-slate-300 transition-all duration-300"
+                      >
+                        Back
+                      </button>
+                      <button
+                        onClick={handleSubmitQuestionnaire}
+                        disabled={submitting}
+                        className="flex-1 bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                      >
+                        {submitting ? 'Submitting...' : 'Submit'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Congratulations View */}
+              <div
+                className={`absolute inset-0 transition-transform duration-500 ease-in-out ${
+                  showCongratulations
+                    ? 'translate-x-0'
+                    : 'translate-x-full'
+                }`}
+              >
+                <div className="h-full p-6 flex items-center justify-center overflow-y-auto">
+                  <div className="text-center space-y-6 max-w-md">
+                    <div className="flex justify-center">
+                      <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-lg">
+                        <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-2xl font-bold text-slate-800 mb-3">
+                        Congrats! We've sent over your responses!
+                      </h3>
+                      <p className="text-lg text-slate-600 mb-4">
+                        The employer will set up next steps if there is a fit.
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        You can take the questionnaire again to edit your responses.
+                      </p>
+                    </div>
+
                     <button
-                      onClick={() => setShowQuestionnaire(false)}
-                      className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-lg font-semibold hover:bg-slate-300 transition-all duration-300"
+                      onClick={handleCloseModal}
+                      className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                     >
-                      Back
-                    </button>
-                    <button
-                      onClick={handleSubmitQuestionnaire}
-                      disabled={submitting}
-                      className="flex-1 bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                    >
-                      {submitting ? 'Submitting...' : 'Submit'}
+                      Close
                     </button>
                   </div>
-                </>
-              )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
