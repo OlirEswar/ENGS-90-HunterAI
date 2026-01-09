@@ -892,20 +892,16 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="flex-shrink-0 p-6 pt-4 border-t border-slate-100">
-                    {selectedJob.questionnaireSent && selectedJob.questionnaireId ? (
+                  {selectedJob.questionnaireSent && selectedJob.questionnaireId && (
+                    <div className="flex-shrink-0 p-6 pt-4 border-t border-slate-100">
                       <button
                         onClick={() => handleTakeQuestionnaire(selectedJob)}
                         className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                       >
                         Take Questionnaire
                       </button>
-                    ) : (
-                      <button className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                        Apply Now
-                      </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
