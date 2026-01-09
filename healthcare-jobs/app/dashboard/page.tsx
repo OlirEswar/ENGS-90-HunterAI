@@ -360,6 +360,7 @@ export default function DashboardPage() {
   const [answers, setAnswers] = useState<{[key: string]: string}>({});
   const [submitting, setSubmitting] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAuthAndResume = async () => {
@@ -521,6 +522,27 @@ export default function DashboardPage() {
   const handleSubmitQuestionnaire = async () => {
     if (!selectedJob || !userProfile) return;
 
+    // Clear previous validation error
+    setValidationError(null);
+
+    // Validate that all questions are answered
+    const unansweredQuestions = questions.filter(
+      question => !answers[question.question_id]?.trim()
+    );
+
+    if (unansweredQuestions.length > 0) {
+      setValidationError(`Please answer all questions before submitting. ${unansweredQuestions.length} question${unansweredQuestions.length > 1 ? 's' : ''} remaining.`);
+
+      // Focus on the first unanswered question
+      const firstUnansweredId = unansweredQuestions[0].question_id;
+      const element = document.getElementById(`question-${firstUnansweredId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.focus();
+      }
+      return;
+    }
+
     setSubmitting(true);
     try {
       // Prepare answers for insertion/update
@@ -544,7 +566,7 @@ export default function DashboardPage() {
 
       if (insertError) {
         console.error('Error saving answers:', insertError);
-        alert('Failed to save answers. Please try again.');
+        setValidationError('Failed to save answers. Please try again.');
         return;
       }
 
@@ -553,7 +575,7 @@ export default function DashboardPage() {
       setShowCongratulations(true);
     } catch (error) {
       console.error('Error submitting questionnaire:', error);
-      alert('Failed to submit questionnaire. Please try again.');
+      setValidationError('Failed to submit questionnaire. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -569,6 +591,7 @@ export default function DashboardPage() {
     setShowQuestionnaire(false);
     setShowCongratulations(false);
     setAnswers({});
+    setValidationError(null);
   };
 
   return (
@@ -902,18 +925,31 @@ export default function DashboardPage() {
                       <h3 className="text-lg font-semibold text-slate-800 mb-4">Questionnaire</h3>
                       <p className="text-slate-600 mb-6">Please answer the following questions to help us better understand your qualifications.</p>
 
+                      {validationError && (
+                        <div className="mb-6 p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg">
+                          {validationError}
+                        </div>
+                      )}
+
                       <div className="space-y-6">
                         {questions.map((question, index) => (
                           <div key={question.question_id}>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                            <label htmlFor={`question-${question.question_id}`} className="block text-sm font-medium text-slate-700 mb-2">
                               {index + 1}. {question.prompt}
                             </label>
                             <textarea
+                              id={`question-${question.question_id}`}
                               value={answers[question.question_id] || ''}
-                              onChange={(e) => setAnswers({
-                                ...answers,
-                                [question.question_id]: e.target.value
-                              })}
+                              onChange={(e) => {
+                                setAnswers({
+                                  ...answers,
+                                  [question.question_id]: e.target.value
+                                });
+                                // Clear validation error when user starts typing
+                                if (validationError) {
+                                  setValidationError(null);
+                                }
+                              }}
                               rows={4}
                               className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition resize-none"
                               placeholder="Type your answer here..."
