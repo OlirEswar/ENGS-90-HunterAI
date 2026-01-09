@@ -441,7 +441,8 @@ export default function DashboardPage() {
     checkAuthAndResume();
   }, [router]);
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
     router.push('/');
   };
 
