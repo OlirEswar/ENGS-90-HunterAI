@@ -142,8 +142,8 @@ export default function UploadResumePage() {
 
       console.log('Successfully updated candidate record:', updateData);
 
-      // Success! Redirect to dashboard
-      router.push('/dashboard');
+      // Success! Redirect to preferences page
+      router.push('/preferences');
     } catch (err) {
       console.error('Unexpected error:', err);
       setError('An unexpected error occurred. Please try again.');
@@ -256,7 +256,7 @@ export default function UploadResumePage() {
               disabled={!file || loading}
               className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              {loading ? 'Uploading...' : 'Continue to Dashboard'}
+              {loading ? 'Uploading...' : 'Continue'}
             </button>
           </form>
         </div>
