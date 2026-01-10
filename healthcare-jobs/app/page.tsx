@@ -139,7 +139,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="h-screen bg-gradient-to-br from-sky-50 via-white to-teal-50 overflow-hidden relative flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-teal-50 relative flex flex-col">
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-sky-500/5 rounded-full blur-3xl animate-pulse" />
@@ -177,7 +177,7 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative z-10 flex-1 flex items-center">
+      <div className="relative z-10 flex-1 flex items-center py-8 lg:py-12">
         <div className="w-full max-w-[1600px] mx-auto px-6 sm:px-8 lg:px-20">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 xl:gap-24 items-center">
             {/* Left Column - Content */}
