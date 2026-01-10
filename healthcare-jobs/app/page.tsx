@@ -4,13 +4,138 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function Home() {
-  const [pulsePhase, setPulsePhase] = useState(0);
+  const [heartbeatPath, setHeartbeatPath] = useState('M 0,300 L 800,300');
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPulsePhase((prev) => (prev + 1) % 3);
-    }, 1500);
-    return () => clearInterval(interval);
+    // Only run animation on larger screens
+    if (window.innerWidth < 1024) {
+      return;
+    }
+
+    const width = 800;
+    const baseline = 300;
+    const step = 2;
+    const speed = 140; // Slower speed for smoother animation
+    const centerX = width * 0.5;
+    const baseSpikeWidth = 120;
+    const baseSpikeHeight = 95;
+    const wobbleBase = 1.6;
+    const lineLength = 400; // Fixed length of the visible line
+    const trailingSpace = 150; // Extra space after spike before it disappears
+
+    const keyframes = [
+      { t: 0, y: 0 },
+      { t: 0.08, y: 0 },
+      { t: 0.12, y: -0.12 },
+      { t: 0.2, y: 0 },
+      { t: 0.3, y: 0 },
+      { t: 0.38, y: -1 },
+      { t: 0.45, y: 0.62 },
+      { t: 0.54, y: -0.18 },
+      { t: 0.72, y: 0 },
+      { t: 1, y: 0 },
+    ];
+
+    const smoothStep = (t: number) => t * t * (3 - 2 * t);
+
+    const sampleBeat = (progress: number, amplitude: number) => {
+      const normalized = Math.min(Math.max(progress, 0), 1);
+      for (let i = 1; i < keyframes.length; i++) {
+        const prev = keyframes[i - 1];
+        const next = keyframes[i];
+        if (normalized <= next.t) {
+          const span = next.t - prev.t || 1;
+          const rawT = (normalized - prev.t) / span;
+          const eased = smoothStep(Math.min(Math.max(rawT, 0), 1));
+          const value = prev.y + (next.y - prev.y) * eased;
+          return value * amplitude;
+        }
+      }
+      return 0;
+    };
+
+    const baselineWobble = (x: number, seed: number, intensity: number) => (
+      Math.sin((x + seed) * 0.035) * intensity + Math.sin((x + seed) * 0.008) * (intensity * 0.6)
+    );
+
+    let endX = 0;
+    let lastTime = performance.now();
+    let animationFrame = 0;
+    let spikeWidth = baseSpikeWidth;
+    let spikeHeight = baseSpikeHeight;
+    let wobbleIntensity = wobbleBase;
+    let noiseSeed = Math.random() * 1000;
+
+    const resetCycle = () => {
+      endX = 0;
+      spikeWidth = baseSpikeWidth + (Math.random() * 26 - 13);
+      spikeHeight = baseSpikeHeight * (0.85 + Math.random() * 0.3);
+      wobbleIntensity = wobbleBase * (0.75 + Math.random() * 0.5);
+      noiseSeed = Math.random() * 1000;
+    };
+
+    const animate = (now: number) => {
+      const delta = Math.min(now - lastTime, 50);
+      endX += (speed * delta) / 1000;
+      lastTime = now;
+
+      const spikeStart = centerX - spikeWidth / 2;
+      const spikeEnd = centerX + spikeWidth / 2;
+
+      // Calculate the window of the line to draw (fixed length)
+      const startX = Math.max(0, endX - lineLength);
+      const maxX = endX;
+
+      let path = `M ${startX},${baseline}`;
+
+      for (let x = startX; x <= maxX; x += step) {
+        let y = baseline;
+
+        // Check if this point is within the spike region
+        if (x >= spikeStart && x <= spikeEnd + trailingSpace) {
+          if (x <= spikeEnd) {
+            // We're in the spike itself
+            const progress = (x - spikeStart) / spikeWidth;
+            y = baseline + sampleBeat(progress, spikeHeight);
+          } else {
+            // We're in the trailing space after the spike
+            y = baseline + baselineWobble(x, noiseSeed, wobbleIntensity);
+          }
+        } else {
+          y = baseline + baselineWobble(x, noiseSeed, wobbleIntensity);
+        }
+
+        path += ` L ${x},${y.toFixed(2)}`;
+      }
+
+      // Handle fractional end point
+      if (maxX % step !== 0 && maxX > startX) {
+        let y = baseline;
+        if (maxX >= spikeStart && maxX <= spikeEnd + trailingSpace) {
+          if (maxX <= spikeEnd) {
+            const progress = (maxX - spikeStart) / spikeWidth;
+            y = baseline + sampleBeat(progress, spikeHeight);
+          } else {
+            y = baseline + baselineWobble(maxX, noiseSeed, wobbleIntensity);
+          }
+        } else {
+          y = baseline + baselineWobble(maxX, noiseSeed, wobbleIntensity);
+        }
+        path += ` L ${maxX.toFixed(2)},${y.toFixed(2)}`;
+      }
+
+      setHeartbeatPath(path);
+
+      // Reset when the spike has completely passed through and exited the visible area
+      if (endX >= width + lineLength + trailingSpace) {
+        resetCycle();
+      }
+
+      animationFrame = requestAnimationFrame(animate);
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
   }, []);
 
   return (
@@ -53,33 +178,33 @@ export default function Home() {
 
       {/* Hero Section */}
       <div className="relative z-10 flex-1 flex items-center">
-        <div className="w-full max-w-[1600px] mx-auto px-8 lg:px-20">
-          <div className="grid lg:grid-cols-2 gap-16 xl:gap-24 items-center">
+        <div className="w-full max-w-[1600px] mx-auto px-6 sm:px-8 lg:px-20">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 xl:gap-24 items-center">
             {/* Left Column - Content */}
-            <div className="space-y-10">
-              <div className="space-y-6">
+            <div className="space-y-8 lg:space-y-10 text-center lg:text-left">
+              <div className="space-y-5 lg:space-y-6">
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-sky-100 border border-sky-200 rounded-full">
                   <span className="w-2 h-2 bg-sky-500 rounded-full animate-pulse" />
                   <span className="text-sky-700 text-sm font-medium">Your Healthcare Career Starts Here</span>
                 </div>
 
-                <h1 className="text-6xl xl:text-7xl 2xl:text-8xl font-bold text-slate-900 leading-[1.1]">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl font-bold text-slate-900 leading-[1.1]">
                   Hunt Down Your{" "}
                   <span className="bg-gradient-to-r from-sky-600 via-teal-600 to-emerald-600 bg-clip-text text-transparent">
                     Dream Career
                   </span>
                 </h1>
 
-                <p className="text-xl xl:text-2xl text-slate-600 leading-relaxed max-w-2xl">
+                <p className="text-lg sm:text-xl xl:text-2xl text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0">
                   Connect with top healthcare employers seeking talented professionals like you.
                   Our intelligent matching system helps you discover opportunities that align perfectly with your skills and aspirations.
                 </p>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link
                   href="/signup"
-                  className="group relative px-10 py-5 bg-gradient-to-r from-sky-500 to-teal-500 text-white rounded-xl font-semibold text-lg shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 text-center"
+                  className="group relative px-8 sm:px-10 py-4 sm:py-5 bg-gradient-to-r from-sky-500 to-teal-500 text-white rounded-xl font-semibold text-base sm:text-lg shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 text-center"
                 >
                   <span className="relative z-10">Get Started Free</span>
                   <div className="absolute inset-0 bg-gradient-to-r from-sky-600 to-teal-600 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -87,95 +212,58 @@ export default function Home() {
 
                 <Link
                   href="/login"
-                  className="px-10 py-5 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-semibold text-lg hover:bg-slate-50 hover:border-slate-300 transition-all duration-300 text-center"
+                  className="px-8 sm:px-10 py-4 sm:py-5 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-semibold text-base sm:text-lg hover:bg-slate-50 hover:border-slate-300 transition-all duration-300 text-center"
                 >
                   Log In
                 </Link>
               </div>
             </div>
 
-            {/* Right Column - Animation */}
-            <div className="relative h-full min-h-[500px] flex items-center justify-center">
+            {/* Right Column - Animation (hidden on mobile/tablet) */}
+            <div className="hidden lg:flex relative h-full min-h-[600px] items-center justify-center">
               {/* Healthcare Animation Container */}
-              <div className="relative w-full h-full flex items-center justify-center">
+              <div className="relative w-full h-full flex items-center justify-center scale-125">
                 {/* Heartbeat Line Animation */}
-                <svg className="absolute w-full h-full opacity-30" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                <svg className="absolute w-full h-full opacity-50" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
                   <defs>
                     <linearGradient id="heartbeatGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                       <stop offset="0%" stopColor="#38bdf8" />
                       <stop offset="50%" stopColor="#2dd4bf" />
                       <stop offset="100%" stopColor="#34d399" />
                     </linearGradient>
+                    <clipPath id="heartbeatClip">
+                      <rect x="0" y="0" width="800" height="600" />
+                    </clipPath>
                   </defs>
 
-                  <path
-                    d="M 0,300 L 150,300 L 180,250 L 210,350 L 240,270 L 270,300 L 800,300"
-                    stroke="url(#heartbeatGradient)"
-                    strokeWidth="4"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <animate
-                      attributeName="stroke-dasharray"
-                      values="0,1000;1000,0;0,1000"
-                      dur="3s"
-                      repeatCount="indefinite"
+                  <g clipPath="url(#heartbeatClip)">
+                    <path
+                      d={heartbeatPath}
+                      stroke="url(#heartbeatGradient)"
+                      strokeWidth="7"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     />
-                  </path>
+                  </g>
                 </svg>
 
-                {/* Floating Medical Icons */}
-                <div className="absolute top-1/4 left-1/4 animate-float">
-                  <div className="p-5 bg-sky-500/20 backdrop-blur-sm rounded-2xl border border-sky-400/30 shadow-2xl">
-                    <svg className="w-12 h-12 text-sky-400" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 11h-4v4h-4v-4H6v-4h4V6h4v4h4v4z"/>
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="absolute top-1/3 right-1/4 animate-float-delayed">
-                  <div className="p-5 bg-teal-500/20 backdrop-blur-sm rounded-2xl border border-teal-400/30 shadow-2xl">
-                    <svg className="w-14 h-14 text-teal-400" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/>
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="absolute bottom-1/4 left-1/3 animate-float-slow">
-                  <div className="p-5 bg-emerald-500/20 backdrop-blur-sm rounded-2xl border border-emerald-400/30 shadow-2xl">
-                    <svg className="w-12 h-12 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
-                  </div>
-                </div>
-
-                {/* Pulsing Heartbeat Circles */}
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <div
-                    className={`w-40 h-40 rounded-full border-4 border-sky-400/50 transition-all duration-1000 ${
-                      pulsePhase === 0 ? 'scale-100 opacity-50' : 'scale-150 opacity-0'
-                    }`}
-                  />
-                  <div
-                    className={`absolute top-0 left-0 w-40 h-40 rounded-full border-4 border-teal-400/50 transition-all duration-1000 ${
-                      pulsePhase === 1 ? 'scale-100 opacity-50' : 'scale-150 opacity-0'
-                    }`}
-                  />
-                  <div
-                    className={`absolute top-0 left-0 w-40 h-40 rounded-full border-4 border-emerald-400/50 transition-all duration-1000 ${
-                      pulsePhase === 2 ? 'scale-100 opacity-50' : 'scale-150 opacity-0'
-                    }`}
-                  />
-                </div>
-
-                {/* Stethoscope Icon */}
-                <div className="absolute bottom-1/3 right-1/3 animate-float">
-                  <div className="p-5 bg-sky-500/20 backdrop-blur-sm rounded-2xl border border-sky-400/30 shadow-2xl">
-                    <svg className="w-12 h-12 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                    </svg>
-                  </div>
+                {/* Static Heart */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <svg
+                    className="w-96 h-96 opacity-40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                  >
+                    <path
+                      className="text-teal-400"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={0.3}
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                    />
+                  </svg>
                 </div>
               </div>
             </div>
