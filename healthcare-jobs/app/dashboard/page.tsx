@@ -405,22 +405,7 @@ export default function DashboardPage() {
 
         const { data: matchesData, error: matchesError } = await supabase
           .from('matches')
-          .select(`
-            job_id,
-            questionnaire_sent,
-            jobs (
-              job_id,
-              job_name,
-              company_name,
-              city,
-              state,
-              hourly_wage_minimum,
-              hourly_wage_maximum,
-              job_description,
-              job_requirements,
-              questionnaire_id
-            )
-          `)
+          .select('job_id, questionnaire_sent')
           .eq('user_id', user.id);
 
         if (matchesError) {
@@ -428,30 +413,71 @@ export default function DashboardPage() {
           return;
         }
 
+        const matchList = matchesData || [];
+        const jobIds = matchList.map((match: any) => match.job_id);
+
+        if (jobIds.length === 0) {
+          setJobs([]);
+          setScreeningInvitations([]);
+          setRegularMatches([]);
+          return;
+        }
+
+        const { data: jobsData, error: jobsError } = await supabase
+          .from('jobs_with_business')
+          .select(`
+            job_id,
+            job_name,
+            company_name,
+            city,
+            state,
+            hourly_wage_minimum,
+            hourly_wage_maximum,
+            job_description,
+            job_requirements,
+            questionnaire_id
+          `)
+          .in('job_id', jobIds);
+
+        if (jobsError) {
+          console.error('Error fetching jobs:', jobsError);
+          return;
+        }
+
+        const jobsById = new Map(
+          (jobsData || []).map((job: any) => [job.job_id, job])
+        );
+
         // Transform the data to match the Job interface
-        const transformedJobs: Job[] = matchesData.map((match: any) => ({
-          id: match.jobs.job_id,
-          title: match.jobs.job_name,
-          company: match.jobs.company_name,
-          city: match.jobs.city,
-          state: match.jobs.state,
-          hourlyWageMin: parseFloat(match.jobs.hourly_wage_minimum),
-          hourlyWageMax: parseFloat(match.jobs.hourly_wage_maximum),
-          description: match.jobs.job_description,
-          requirements: match.jobs.job_requirements,
-          questionnaireId: match.jobs.questionnaire_id || null,
-          questionnaireSent: match.questionnaire_sent
-        }));
+        const transformedJobs: Job[] = matchList
+          .map((match: any) => {
+            const job = jobsById.get(match.job_id);
+            if (!job) return null;
+            return {
+              id: job.job_id,
+              title: job.job_name,
+              company: job.company_name,
+              city: job.city,
+              state: job.state,
+              hourlyWageMin: parseFloat(job.hourly_wage_minimum),
+              hourlyWageMax: parseFloat(job.hourly_wage_maximum),
+              description: job.job_description,
+              requirements: job.job_requirements,
+              questionnaireId: job.questionnaire_id || null,
+              questionnaireSent: match.questionnaire_sent
+            };
+          })
+          .filter(Boolean) as Job[];
 
         // Split jobs based on questionnaire_sent status
         const screening: Job[] = [];
         const regular: Job[] = [];
 
-        matchesData.forEach((match: any, index: number) => {
-          if (match.questionnaire_sent) {
-            screening.push(transformedJobs[index]);
+        transformedJobs.forEach((job: Job) => {
+          if (job.questionnaireSent) {
+            screening.push(job);
           } else {
-            regular.push(transformedJobs[index]);
+            regular.push(job);
           }
         });
 

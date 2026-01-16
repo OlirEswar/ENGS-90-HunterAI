@@ -6,8 +6,12 @@ import { supabase } from '@/lib/supabase';
 
 interface Job {
   job_id: string;
+  business_id: string;
   job_name: string;
   company_name: string;
+  u_businesses?: {
+    company_name: string;
+  } | null;
   city: string;
   state: string;
   hourly_wage_minimum: number;
@@ -48,11 +52,22 @@ interface JobQuestion {
 
 interface BusinessProfile {
   business_id: string;
+  user_id: string;
   company_name: string;
   contact_name: string;
   email: string;
   phone: string | null;
 }
+
+const emptyJobFormData = {
+  jobName: '',
+  city: '',
+  state: '',
+  hourlyWageMinimum: '',
+  hourlyWageMaximum: '',
+  jobDescription: '',
+  jobRequirements: ''
+};
 
 function ProfileTab({
   businessProfile,
@@ -97,7 +112,7 @@ function ProfileTab({
     try {
       const contactName = `${formData.contactFirstName} ${formData.contactLastName}`.trim();
 
-      const { error: updateError } = await supabase
+      const { data: updatedProfile, error: updateError } = await supabase
         .from('u_businesses')
         .update({
           company_name: formData.companyName,
@@ -105,19 +120,15 @@ function ProfileTab({
           email: formData.email,
           phone: formData.phone || null
         })
-        .eq('business_id', businessProfile.business_id);
+        .eq('user_id', businessProfile.user_id)
+        .select()
+        .single();
 
-      if (updateError) {
+      if (updateError || !updatedProfile) {
         throw new Error('Failed to update profile');
       }
 
-      setBusinessProfile({
-        ...businessProfile,
-        company_name: formData.companyName,
-        contact_name: contactName,
-        email: formData.email,
-        phone: formData.phone || null
-      });
+      setBusinessProfile(updatedProfile);
 
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
     } catch (error) {
@@ -791,28 +802,42 @@ function QuestionnaireEditorModal({
   );
 }
 
-function CreateJobModal({
+function JobFormModal({
   isOpen,
   onClose,
   businessProfile,
-  onJobCreated
+  onJobSaved,
+  jobToEdit
 }: {
   isOpen: boolean;
   onClose: () => void;
   businessProfile: BusinessProfile | null;
-  onJobCreated: () => void;
+  onJobSaved: () => void;
+  jobToEdit?: Job | null;
 }) {
-  const [formData, setFormData] = useState({
-    jobName: '',
-    city: '',
-    state: '',
-    hourlyWageMinimum: '',
-    hourlyWageMaximum: '',
-    jobDescription: '',
-    jobRequirements: ''
-  });
+  const [formData, setFormData] = useState(emptyJobFormData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const isEditing = Boolean(jobToEdit);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (jobToEdit) {
+      setFormData({
+        jobName: jobToEdit.job_name,
+        city: jobToEdit.city,
+        state: jobToEdit.state,
+        hourlyWageMinimum: jobToEdit.hourly_wage_minimum?.toString() ?? '',
+        hourlyWageMaximum: jobToEdit.hourly_wage_maximum?.toString() ?? '',
+        jobDescription: jobToEdit.job_description,
+        jobRequirements: jobToEdit.job_requirements?.join('\n') ?? ''
+      });
+    } else {
+      setFormData(emptyJobFormData);
+    }
+    setError('');
+  }, [isOpen, jobToEdit]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -828,39 +853,43 @@ function CreateJobModal({
         .map(req => req.trim())
         .filter(req => req.length > 0);
 
-      const { error: insertError } = await supabase
-        .from('jobs')
-        .insert({
-          job_name: formData.jobName,
-          company_name: businessProfile.company_name,
-          city: formData.city,
-          state: formData.state,
-          hourly_wage_minimum: parseFloat(formData.hourlyWageMinimum),
-          hourly_wage_maximum: parseFloat(formData.hourlyWageMaximum),
-          job_description: formData.jobDescription,
-          job_requirements: requirements,
-          business_id: businessProfile.business_id
-        });
+      const payload = {
+        job_name: formData.jobName,
+        company_name: businessProfile.company_name,
+        city: formData.city,
+        state: formData.state,
+        hourly_wage_minimum: parseFloat(formData.hourlyWageMinimum),
+        hourly_wage_maximum: parseFloat(formData.hourlyWageMaximum),
+        job_description: formData.jobDescription,
+        job_requirements: requirements,
+        business_id: businessProfile.business_id
+      };
 
-      if (insertError) {
-        throw insertError;
+      if (jobToEdit) {
+        const { error: updateError } = await supabase
+          .from('jobs')
+          .update(payload)
+          .eq('job_id', jobToEdit.job_id);
+
+        if (updateError) {
+          throw updateError;
+        }
+      } else {
+        const { error: insertError } = await supabase
+          .from('jobs')
+          .insert(payload);
+
+        if (insertError) {
+          throw insertError;
+        }
       }
 
-      // Reset form and close modal
-      setFormData({
-        jobName: '',
-        city: '',
-        state: '',
-        hourlyWageMinimum: '',
-        hourlyWageMaximum: '',
-        jobDescription: '',
-        jobRequirements: ''
-      });
-      onJobCreated();
+      setFormData(emptyJobFormData);
+      onJobSaved();
       onClose();
     } catch (err) {
-      console.error('Error creating job:', err);
-      setError('Failed to create job posting. Please try again.');
+      console.error('Error saving job:', err);
+      setError(isEditing ? 'Failed to update job posting. Please try again.' : 'Failed to create job posting. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -879,8 +908,12 @@ function CreateJobModal({
       >
         <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between z-10">
           <div>
-            <h2 className="text-2xl font-bold text-slate-800">Create New Job Posting</h2>
-            <p className="text-slate-600">Fill in the details for your new position</p>
+            <h2 className="text-2xl font-bold text-slate-800">
+              {isEditing ? 'Edit Job Posting' : 'Create New Job Posting'}
+            </h2>
+            <p className="text-slate-600">
+              {isEditing ? 'Update the details for this position' : 'Fill in the details for your new position'}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -1025,7 +1058,7 @@ function CreateJobModal({
               disabled={loading}
               className="flex-1 bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              {loading ? 'Creating...' : 'Create Job Posting'}
+              {loading ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save Changes' : 'Create Job Posting')}
             </button>
           </div>
         </form>
@@ -1673,7 +1706,11 @@ export default function BusinessDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'job-postings' | 'questionnaires' | 'profile'>('job-postings');
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
-  const [showCreateJobModal, setShowCreateJobModal] = useState(false);
+  const [showJobFormModal, setShowJobFormModal] = useState(false);
+  const [jobToEdit, setJobToEdit] = useState<Job | null>(null);
+  const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
+  const [showDeleteJobConfirm, setShowDeleteJobConfirm] = useState(false);
+  const [deletingJob, setDeletingJob] = useState(false);
 
   useEffect(() => {
     checkAuthAndLoadData();
@@ -1708,8 +1745,21 @@ export default function BusinessDashboardPage() {
     try {
       // Fetch jobs for this business
       const { data: jobsData, error: jobsError } = await supabase
-        .from('jobs')
-        .select('*')
+        .from('jobs_with_business')
+        .select(`
+          job_id,
+          business_id,
+          job_name,
+          company_name,
+          city,
+          state,
+          hourly_wage_minimum,
+          hourly_wage_maximum,
+          job_description,
+          job_requirements,
+          created_at,
+          questionnaire_id
+        `)
         .eq('business_id', businessId)
         .order('created_at', { ascending: false });
 
@@ -1746,9 +1796,48 @@ export default function BusinessDashboardPage() {
     router.push('/');
   };
 
-  const handleJobCreated = () => {
+  const handleJobSaved = () => {
     if (businessProfile) {
       fetchJobs(businessProfile.business_id);
+    }
+  };
+
+  const handleEditJob = (job: Job) => {
+    setSelectedJob(null);
+    setJobToEdit(job);
+    setShowJobFormModal(true);
+  };
+
+  const handleDeleteJobRequest = (job: Job) => {
+    setSelectedJob(null);
+    setJobToDelete(job);
+    setShowDeleteJobConfirm(true);
+  };
+
+  const handleDeleteJobConfirm = async () => {
+    if (!jobToDelete || !businessProfile) return;
+
+    setDeletingJob(true);
+    try {
+      await supabase
+        .from('matches')
+        .delete()
+        .eq('job_id', jobToDelete.job_id);
+
+      const { error } = await supabase
+        .from('jobs')
+        .delete()
+        .eq('job_id', jobToDelete.job_id);
+
+      if (error) throw error;
+
+      setShowDeleteJobConfirm(false);
+      setJobToDelete(null);
+      fetchJobs(businessProfile.business_id);
+    } catch (error) {
+      console.error('Error deleting job:', error);
+    } finally {
+      setDeletingJob(false);
     }
   };
 
@@ -1862,7 +1951,10 @@ export default function BusinessDashboardPage() {
                   <p className="text-slate-600">Manage your open positions and view matched candidates</p>
                 </div>
                 <button
-                  onClick={() => setShowCreateJobModal(true)}
+                  onClick={() => {
+                    setJobToEdit(null);
+                    setShowJobFormModal(true);
+                  }}
                   className="bg-gradient-to-r from-sky-500 to-teal-500 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center gap-2"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1886,7 +1978,10 @@ export default function BusinessDashboardPage() {
                   <h3 className="text-xl font-semibold text-slate-800 mb-2">No Job Postings Yet</h3>
                   <p className="text-slate-600 mb-6">Create your first job posting to start finding candidates</p>
                   <button
-                    onClick={() => setShowCreateJobModal(true)}
+                    onClick={() => {
+                      setJobToEdit(null);
+                      setShowJobFormModal(true);
+                    }}
                     className="bg-gradient-to-r from-sky-500 to-teal-500 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 inline-flex items-center gap-2"
                   >
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1903,17 +1998,44 @@ export default function BusinessDashboardPage() {
                       onClick={() => setSelectedJob(job)}
                       className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 cursor-pointer border border-slate-200 hover:border-sky-300 p-6 group"
                     >
-                      <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-start justify-between mb-4 gap-3">
                         <div className="flex-1">
                           <h3 className="text-xl font-semibold text-slate-800 group-hover:text-sky-600 transition-colors mb-1">
                             {job.job_name}
                           </h3>
-                          <p className="text-slate-600 font-medium">{job.company_name}</p>
+                          <p className="text-slate-600 font-medium">
+                            {businessProfile?.company_name || job.company_name}
+                          </p>
                         </div>
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-teal-100 group-hover:from-sky-200 group-hover:to-teal-200 transition-colors">
-                          <svg className="h-5 w-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            aria-label="Edit job posting"
+                            title="Edit job posting"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleEditJob(job);
+                            }}
+                            className="h-9 w-9 rounded-lg bg-sky-100 text-sky-700 hover:bg-sky-200 transition flex items-center justify-center"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Delete job posting"
+                            title="Delete job posting"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteJobRequest(job);
+                            }}
+                            className="h-9 w-9 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition flex items-center justify-center"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
 
@@ -1960,12 +2082,16 @@ export default function BusinessDashboardPage() {
         </main>
       </div>
 
-      {/* Create Job Modal */}
-      <CreateJobModal
-        isOpen={showCreateJobModal}
-        onClose={() => setShowCreateJobModal(false)}
+      {/* Job Form Modal */}
+      <JobFormModal
+        isOpen={showJobFormModal}
+        onClose={() => {
+          setShowJobFormModal(false);
+          setJobToEdit(null);
+        }}
         businessProfile={businessProfile}
-        onJobCreated={handleJobCreated}
+        onJobSaved={handleJobSaved}
+        jobToEdit={jobToEdit}
       />
 
       {/* Job Detail Modal */}
@@ -1976,6 +2102,61 @@ export default function BusinessDashboardPage() {
         businessProfile={businessProfile}
         onNavigateToQuestionnaires={() => setActiveTab('questionnaires')}
       />
+
+      {showDeleteJobConfirm && jobToDelete && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          onClick={() => {
+            setShowDeleteJobConfirm(false);
+            setJobToDelete(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Delete Job Posting</h3>
+                <p className="text-sm text-slate-600">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-slate-600 mb-6">
+              Are you sure you want to delete "{jobToDelete.job_name}"? Matched candidates for this role will be removed.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteJobConfirm(false);
+                  setJobToDelete(null);
+                }}
+                className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-lg font-semibold hover:bg-slate-300 transition-all duration-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteJobConfirm}
+                disabled={deletingJob}
+                className="flex-1 bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deletingJob ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete Job'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
