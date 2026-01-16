@@ -161,6 +161,12 @@ export default function Home() {
 
           <div className="hidden md:flex items-center gap-4">
             <Link
+              href="/business/login"
+              className="px-6 py-2.5 text-slate-700 hover:text-slate-900 font-medium transition-colors"
+            >
+              For Employers
+            </Link>
+            <Link
               href="/login"
               className="px-6 py-2.5 text-slate-700 hover:text-slate-900 font-medium transition-colors"
             >
@@ -273,18 +279,26 @@ export default function Home() {
 
       {/* Mobile CTA */}
       <div className="md:hidden relative z-10 p-6 bg-white/95 backdrop-blur-lg border-t border-slate-200">
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-3">
+            <Link
+              href="/login"
+              className="flex-1 px-6 py-3 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-semibold text-center hover:bg-slate-50"
+            >
+              Log In
+            </Link>
+            <Link
+              href="/signup"
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-sky-500 to-teal-500 text-white rounded-xl font-semibold text-center shadow-lg"
+            >
+              Sign Up
+            </Link>
+          </div>
           <Link
-            href="/login"
-            className="flex-1 px-6 py-3 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-semibold text-center hover:bg-slate-50"
+            href="/business/login"
+            className="w-full px-6 py-3 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl font-medium text-center hover:bg-slate-200 text-sm"
           >
-            Log In
-          </Link>
-          <Link
-            href="/signup"
-            className="flex-1 px-6 py-3 bg-gradient-to-r from-sky-500 to-teal-500 text-white rounded-xl font-semibold text-center shadow-lg"
-          >
-            Sign Up
+            Employer? Sign in here
           </Link>
         </div>
       </div>

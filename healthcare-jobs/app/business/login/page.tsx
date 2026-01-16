@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-export default function LoginPage() {
+export default function BusinessLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +29,21 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        router.push('/dashboard');
+        // Check if user is a business user
+        const { data: businessData, error: businessError } = await supabase
+          .from('u_businesses')
+          .select('business_id')
+          .eq('user_id', data.user.id)
+          .single();
+
+        if (businessError || !businessData) {
+          // Not a business user, sign them out and show error
+          await supabase.auth.signOut();
+          setError('This account is not registered as a business. Please sign in as a candidate or create a business account.');
+          return;
+        }
+
+        router.push('/business/dashboard');
       }
     } catch (err) {
       console.error('Login error:', err);
@@ -46,12 +60,12 @@ export default function LoginPage() {
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-teal-500 shadow-lg">
               <svg className="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
           </Link>
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Welcome Back</h1>
-          <p className="text-slate-600">Sign in to continue your healthcare journey</p>
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">Business Sign In</h1>
+          <p className="text-slate-600">Access your employer dashboard</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
@@ -64,7 +78,7 @@ export default function LoginPage() {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
-                Email Address
+                Business Email
               </label>
               <input
                 id="email"
@@ -73,7 +87,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
-                placeholder="you@example.com"
+                placeholder="hr@company.com"
               />
             </div>
 
@@ -114,17 +128,17 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-slate-600">
               Don&apos;t have an account?{' '}
-              <Link href="/signup" className="text-sky-600 hover:text-sky-700 font-semibold">
-                Sign Up
+              <Link href="/business/signup" className="text-sky-600 hover:text-sky-700 font-semibold">
+                Create Business Account
               </Link>
             </p>
           </div>
 
           <div className="mt-4 text-center">
             <p className="text-slate-500 text-sm">
-              Are you an employer?{' '}
-              <Link href="/business/login" className="text-sky-600 hover:text-sky-700 font-medium">
-                Sign in to business portal
+              Looking for a job?{' '}
+              <Link href="/login" className="text-sky-600 hover:text-sky-700 font-medium">
+                Sign in as a candidate
               </Link>
             </p>
           </div>
