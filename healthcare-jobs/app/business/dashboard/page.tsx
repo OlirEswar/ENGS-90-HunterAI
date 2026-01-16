@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
@@ -16,6 +16,7 @@ interface Job {
   job_requirements: string[];
   created_at: string;
   match_count?: number;
+  questionnaire_id?: string | null;
 }
 
 interface MatchedCandidate {
@@ -33,8 +34,9 @@ interface MatchedCandidate {
 interface Questionnaire {
   questionnaire_id: string;
   name: string;
-  job_id: string;
+  business_id: string;
   is_active: boolean;
+  question_count?: number;
 }
 
 interface JobQuestion {
@@ -230,16 +232,301 @@ function ProfileTab({
   );
 }
 
+function QuestionnairesTab({
+  businessProfile,
+  onNavigateToTab
+}: {
+  businessProfile: BusinessProfile | null;
+  onNavigateToTab?: (tab: string) => void;
+}) {
+  const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingQuestionnaire, setEditingQuestionnaire] = useState<Questionnaire | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [deletingQuestionnaire, setDeletingQuestionnaire] = useState<Questionnaire | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (businessProfile) {
+      fetchQuestionnaires();
+    }
+  }, [businessProfile]);
+
+  const fetchQuestionnaires = async () => {
+    if (!businessProfile) return;
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('questionnaires')
+        .select(`
+          questionnaire_id,
+          name,
+          business_id,
+          is_active,
+          job_questions (question_id)
+        `)
+        .eq('business_id', businessProfile.business_id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const questionnairesWithCount = (data || []).map((q: any) => ({
+        questionnaire_id: q.questionnaire_id,
+        name: q.name,
+        business_id: q.business_id,
+        is_active: q.is_active,
+        question_count: q.job_questions?.length || 0
+      }));
+
+      setQuestionnaires(questionnairesWithCount);
+    } catch (err) {
+      console.error('Error fetching questionnaires:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (questionnaire: Questionnaire) => {
+    setEditingQuestionnaire(questionnaire);
+    setShowEditor(true);
+  };
+
+  const handleCreate = () => {
+    setEditingQuestionnaire(null);
+    setShowEditor(true);
+  };
+
+  const handleDeleteClick = (questionnaire: Questionnaire) => {
+    setDeletingQuestionnaire(questionnaire);
+    setShowDeleteConfirmation(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingQuestionnaire) return;
+
+    setIsDeleting(true);
+    try {
+      // First, unassign this questionnaire from any jobs
+      const { error: unassignError } = await supabase
+        .from('jobs')
+        .update({ questionnaire_id: null })
+        .eq('questionnaire_id', deletingQuestionnaire.questionnaire_id);
+
+      if (unassignError) throw unassignError;
+
+      // Reset questionnaire_sent for matches on those jobs
+      const { data: affectedJobs } = await supabase
+        .from('jobs')
+        .select('job_id')
+        .eq('questionnaire_id', deletingQuestionnaire.questionnaire_id);
+
+      if (affectedJobs && affectedJobs.length > 0) {
+        await supabase
+          .from('matches')
+          .update({ questionnaire_sent: false })
+          .in('job_id', affectedJobs.map(j => j.job_id));
+      }
+
+      // Delete questions
+      const { error: deleteQuestionsError } = await supabase
+        .from('job_questions')
+        .delete()
+        .eq('questionnaire_id', deletingQuestionnaire.questionnaire_id);
+
+      if (deleteQuestionsError) throw deleteQuestionsError;
+
+      // Delete questionnaire
+      const { error: deleteError } = await supabase
+        .from('questionnaires')
+        .delete()
+        .eq('questionnaire_id', deletingQuestionnaire.questionnaire_id);
+
+      if (deleteError) throw deleteError;
+
+      setShowDeleteConfirmation(false);
+      setDeletingQuestionnaire(null);
+      fetchQuestionnaires();
+    } catch (err) {
+      console.error('Error deleting questionnaire:', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSaved = () => {
+    fetchQuestionnaires();
+    setShowEditor(false);
+    setEditingQuestionnaire(null);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-800 mb-2">Questionnaires</h2>
+          <p className="text-slate-600">Create and manage screening questionnaires for your job postings</p>
+        </div>
+        <button
+          onClick={handleCreate}
+          className="bg-gradient-to-r from-sky-500 to-teal-500 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center gap-2"
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          New Questionnaire
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+        </div>
+      ) : questionnaires.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl shadow-md border border-slate-200">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
+            <svg className="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-semibold text-slate-800 mb-2">No Questionnaires Yet</h3>
+          <p className="text-slate-600 mb-6">Create your first questionnaire to use with job postings</p>
+          <button
+            onClick={handleCreate}
+            className="bg-gradient-to-r from-sky-500 to-teal-500 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 inline-flex items-center gap-2"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Your First Questionnaire
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {questionnaires.map((questionnaire) => (
+            <div
+              key={questionnaire.questionnaire_id}
+              className="bg-white rounded-xl shadow-md border border-slate-200 p-6 hover:shadow-lg transition-shadow"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-purple-100 to-indigo-100">
+                    <svg className="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800">{questionnaire.name}</h3>
+                    <p className="text-sm text-slate-600">
+                      {questionnaire.question_count} question{questionnaire.question_count !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleEdit(questionnaire)}
+                    className="px-4 py-2 bg-sky-100 text-sky-700 rounded-lg hover:bg-sky-200 transition font-medium text-sm flex items-center gap-2"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(questionnaire)}
+                    className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition font-medium text-sm flex items-center gap-2"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Questionnaire Editor Modal */}
+      {businessProfile && (
+        <QuestionnaireEditorModal
+          isOpen={showEditor}
+          onClose={() => {
+            setShowEditor(false);
+            setEditingQuestionnaire(null);
+          }}
+          businessId={businessProfile.business_id}
+          existingQuestionnaire={editingQuestionnaire}
+          onSave={handleSaved}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirmation && deletingQuestionnaire && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowDeleteConfirmation(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Delete Questionnaire</h3>
+                <p className="text-sm text-slate-600">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-slate-600 mb-6">
+              Are you sure you want to delete "{deletingQuestionnaire.name}"? Jobs using this questionnaire will no longer have a questionnaire assigned.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirmation(false)}
+                className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-lg font-semibold hover:bg-slate-300 transition-all duration-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="flex-1 bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete Questionnaire'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QuestionnaireEditorModal({
   isOpen,
   onClose,
-  jobId,
+  businessId,
   existingQuestionnaire,
   onSave
 }: {
   isOpen: boolean;
   onClose: () => void;
-  jobId: string;
+  businessId: string;
   existingQuestionnaire: Questionnaire | null;
   onSave: () => void;
 }) {
@@ -248,6 +535,7 @@ function QuestionnaireEditorModal({
   const [loading, setLoading] = useState(false);
   const [fetchingQuestions, setFetchingQuestions] = useState(false);
   const [error, setError] = useState('');
+  const questionsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -287,6 +575,10 @@ function QuestionnaireEditorModal({
 
   const handleAddQuestion = () => {
     setQuestions([...questions, { id: crypto.randomUUID(), prompt: '', isNew: true }]);
+    // Scroll to the new question after state updates
+    setTimeout(() => {
+      questionsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 100);
   };
 
   const handleRemoveQuestion = (id: string) => {
@@ -319,7 +611,7 @@ function QuestionnaireEditorModal({
           .from('questionnaires')
           .insert({
             name: questionnaireName,
-            job_id: jobId,
+            business_id: businessId,
             is_active: true
           })
           .select()
@@ -430,21 +722,9 @@ function QuestionnaireEditorModal({
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-slate-700">
-                  Questions
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddQuestion}
-                  className="text-sky-600 hover:text-sky-700 text-sm font-medium flex items-center gap-1"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Question
-                </button>
-              </div>
+              <label className="block text-sm font-medium text-slate-700">
+                Questions
+              </label>
 
               {questions.map((question, index) => (
                 <div key={question.id} className="flex gap-3 items-start">
@@ -473,11 +753,22 @@ function QuestionnaireEditorModal({
                   )}
                 </div>
               ))}
+              <div ref={questionsEndRef} />
             </div>
           )}
         </div>
 
-        <div className="flex-shrink-0 border-t border-slate-200 p-6">
+        <div className="flex-shrink-0 border-t border-slate-200 p-6 space-y-4">
+          <button
+            type="button"
+            onClick={handleAddQuestion}
+            className="w-full py-3 border-2 border-dashed border-slate-300 text-slate-600 rounded-lg font-medium hover:border-sky-400 hover:text-sky-600 transition-all duration-300 flex items-center justify-center gap-2"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Question
+          </button>
           <div className="flex gap-3">
             <button
               type="button"
@@ -746,20 +1037,24 @@ function CreateJobModal({
 function JobDetailModal({
   job,
   onClose,
-  onScreeningSent
+  onScreeningSent,
+  businessProfile,
+  onNavigateToQuestionnaires
 }: {
   job: Job | null;
   onClose: () => void;
   onScreeningSent: () => void;
+  businessProfile: BusinessProfile | null;
+  onNavigateToQuestionnaires: () => void;
 }) {
   const [candidates, setCandidates] = useState<MatchedCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [sendingScreening, setSendingScreening] = useState<string | null>(null);
   const [downloadingResume, setDownloadingResume] = useState<string | null>(null);
   const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
-  const [showQuestionnaireEditor, setShowQuestionnaireEditor] = useState(false);
-  const [deletingQuestionnaire, setDeletingQuestionnaire] = useState(false);
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [availableQuestionnaires, setAvailableQuestionnaires] = useState<Questionnaire[]>([]);
+  const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [viewingResponsesFor, setViewingResponsesFor] = useState<MatchedCandidate | null>(null);
   const [candidateResponses, setCandidateResponses] = useState<{question: string; answer: string}[]>([]);
   const [loadingResponses, setLoadingResponses] = useState(false);
@@ -768,6 +1063,7 @@ function JobDetailModal({
     if (job) {
       fetchCandidates();
       fetchQuestionnaire();
+      fetchAvailableQuestionnaires();
     }
   }, [job]);
 
@@ -817,13 +1113,16 @@ function JobDetailModal({
   };
 
   const fetchQuestionnaire = async () => {
-    if (!job) return;
+    if (!job || !job.questionnaire_id) {
+      setQuestionnaire(null);
+      return;
+    }
 
     try {
       const { data, error } = await supabase
         .from('questionnaires')
         .select('*')
-        .eq('job_id', job.job_id)
+        .eq('questionnaire_id', job.questionnaire_id)
         .eq('is_active', true)
         .single();
 
@@ -838,68 +1137,78 @@ function JobDetailModal({
     }
   };
 
-  const unsendQuestionnaireFromAllCandidates = async () => {
-    if (!job) return;
+  const fetchAvailableQuestionnaires = async () => {
+    if (!businessProfile) return;
 
     try {
-      // Reset questionnaire_sent to false for all matches for this job
+      const { data, error } = await supabase
+        .from('questionnaires')
+        .select(`
+          questionnaire_id,
+          name,
+          business_id,
+          is_active,
+          job_questions (question_id)
+        `)
+        .eq('business_id', businessProfile.business_id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const questionnairesWithCount = (data || []).map((q: any) => ({
+        questionnaire_id: q.questionnaire_id,
+        name: q.name,
+        business_id: q.business_id,
+        is_active: q.is_active,
+        question_count: q.job_questions?.length || 0
+      }));
+
+      setAvailableQuestionnaires(questionnairesWithCount);
+    } catch (err) {
+      console.error('Error fetching available questionnaires:', err);
+    }
+  };
+
+  const handleSelectQuestionnaire = async (questionnaireId: string | null) => {
+    if (!job) return;
+
+    setSavingQuestionnaire(true);
+    try {
+      // Update the job with the selected questionnaire
       const { error } = await supabase
-        .from('matches')
-        .update({ questionnaire_sent: false })
+        .from('jobs')
+        .update({ questionnaire_id: questionnaireId })
         .eq('job_id', job.job_id);
 
       if (error) throw error;
 
-      // Update local state
-      setCandidates(prev =>
-        prev.map(c => ({ ...c, questionnaire_sent: false }))
-      );
+      // If changing questionnaire, reset questionnaire_sent for all candidates
+      if (job.questionnaire_id !== questionnaireId) {
+        await supabase
+          .from('matches')
+          .update({ questionnaire_sent: false })
+          .eq('job_id', job.job_id);
+
+        // Update local state
+        setCandidates(prev => prev.map(c => ({ ...c, questionnaire_sent: false })));
+      }
+
+      // Update job's questionnaire_id locally
+      job.questionnaire_id = questionnaireId;
+
+      // Fetch the new questionnaire details
+      if (questionnaireId) {
+        const selected = availableQuestionnaires.find(q => q.questionnaire_id === questionnaireId);
+        setQuestionnaire(selected || null);
+      } else {
+        setQuestionnaire(null);
+      }
     } catch (err) {
-      console.error('Error unsending questionnaire:', err);
-    }
-  };
-
-  const handleDeleteQuestionnaire = async () => {
-    if (!questionnaire) return;
-
-    setDeletingQuestionnaire(true);
-    try {
-      // First delete all questions associated with the questionnaire
-      const { error: deleteQuestionsError } = await supabase
-        .from('job_questions')
-        .delete()
-        .eq('questionnaire_id', questionnaire.questionnaire_id);
-
-      if (deleteQuestionsError) throw deleteQuestionsError;
-
-      // Then delete the questionnaire
-      const { error: deleteQuestionnaireError } = await supabase
-        .from('questionnaires')
-        .delete()
-        .eq('questionnaire_id', questionnaire.questionnaire_id);
-
-      if (deleteQuestionnaireError) throw deleteQuestionnaireError;
-
-      // Unsend questionnaire from all candidates
-      await unsendQuestionnaireFromAllCandidates();
-
-      setQuestionnaire(null);
-      setShowDeleteConfirmation(false);
-    } catch (err) {
-      console.error('Error deleting questionnaire:', err);
+      console.error('Error updating questionnaire:', err);
     } finally {
-      setDeletingQuestionnaire(false);
+      setSavingQuestionnaire(false);
     }
-  };
-
-  const handleQuestionnaireEditorClose = () => {
-    setShowQuestionnaireEditor(false);
-  };
-
-  const handleQuestionnaireSaved = async () => {
-    // Unsend questionnaire from all candidates when edited
-    await unsendQuestionnaireFromAllCandidates();
-    fetchQuestionnaire();
   };
 
   const handleViewResponses = async (candidate: MatchedCandidate) => {
@@ -1041,52 +1350,107 @@ function JobDetailModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Questionnaire Management Section */}
+          {/* Questionnaire Selection Section */}
           <div className="mb-8 p-4 bg-slate-50 rounded-lg border border-slate-200">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-shrink-0">
                 <h3 className="text-lg font-semibold text-slate-800">Screening Questionnaire</h3>
-                {questionnaire ? (
-                  <p className="text-sm text-green-600 flex items-center gap-1 mt-1">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {questionnaire.name}
-                  </p>
-                ) : (
-                  <p className="text-sm text-amber-600 flex items-center gap-1 mt-1">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    No questionnaire created yet
-                  </p>
-                )}
+                <p className="text-sm text-slate-600 mt-1">Select a questionnaire to send to candidates</p>
               </div>
               <div className="flex items-center gap-2">
-                {questionnaire ? (
-                  <>
+                {availableQuestionnaires.length > 0 ? (
+                  <div className="relative">
                     <button
-                      onClick={() => setShowQuestionnaireEditor(true)}
-                      className="px-4 py-2 bg-sky-100 text-sky-700 rounded-lg hover:bg-sky-200 transition font-medium text-sm flex items-center gap-2"
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      disabled={savingQuestionnaire}
+                      className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-medium text-sm hover:border-sky-400 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition min-w-[240px] disabled:opacity-50 flex items-center justify-between gap-2"
                     >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      <span className="truncate">
+                        {questionnaire ? questionnaire.name : '-- No questionnaire --'}
+                      </span>
+                      <svg
+                        className={`h-4 w-4 text-slate-500 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
-                      Edit
                     </button>
-                    <button
-                      onClick={() => setShowDeleteConfirmation(true)}
-                      className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition font-medium text-sm flex items-center gap-2"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      Delete
-                    </button>
-                  </>
+
+                    {dropdownOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-[60]"
+                          onClick={() => setDropdownOpen(false)}
+                        />
+                        <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-[70] overflow-hidden">
+                          <div className="max-h-64 overflow-y-auto">
+                            <button
+                              onClick={() => {
+                                handleSelectQuestionnaire(null);
+                                setDropdownOpen(false);
+                              }}
+                              className={`w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors flex items-center gap-3 ${
+                                !questionnaire ? 'bg-sky-50' : ''
+                              }`}
+                            >
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+                                <svg className="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-slate-700">No questionnaire</p>
+                                <p className="text-xs text-slate-500">Don't use a questionnaire</p>
+                              </div>
+                              {!questionnaire && (
+                                <svg className="h-4 w-4 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </button>
+
+                            {availableQuestionnaires.map((q) => (
+                              <button
+                                key={q.questionnaire_id}
+                                onClick={() => {
+                                  handleSelectQuestionnaire(q.questionnaire_id);
+                                  setDropdownOpen(false);
+                                }}
+                                className={`w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors flex items-center gap-3 ${
+                                  questionnaire?.questionnaire_id === q.questionnaire_id ? 'bg-sky-50' : ''
+                                }`}
+                              >
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-100 to-indigo-100">
+                                  <svg className="h-4 w-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-slate-700">{q.name}</p>
+                                  <p className="text-xs text-slate-500">
+                                    {q.question_count} question{q.question_count !== 1 ? 's' : ''}
+                                  </p>
+                                </div>
+                                {questionnaire?.questionnaire_id === q.questionnaire_id && (
+                                  <svg className="h-4 w-4 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <button
-                    onClick={() => setShowQuestionnaireEditor(true)}
+                    onClick={() => {
+                      onClose();
+                      onNavigateToQuestionnaires();
+                    }}
                     className="px-4 py-2 bg-gradient-to-r from-sky-500 to-teal-500 text-white rounded-lg hover:shadow-lg transition font-medium text-sm flex items-center gap-2"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1094,6 +1458,9 @@ function JobDetailModal({
                     </svg>
                     Create Questionnaire
                   </button>
+                )}
+                {savingQuestionnaire && (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-sky-500"></div>
                 )}
               </div>
             </div>
@@ -1225,56 +1592,6 @@ function JobDetailModal({
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      {showDeleteConfirmation && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-[70] flex items-center justify-center p-4"
-          onClick={() => setShowDeleteConfirmation(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800">Delete Questionnaire</h3>
-                <p className="text-sm text-slate-600">This action cannot be undone</p>
-              </div>
-            </div>
-            <p className="text-slate-600 mb-6">
-              Are you sure you want to delete this questionnaire? All candidates who were sent this questionnaire will need to be re-sent a new one.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeleteConfirmation(false)}
-                className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-lg font-semibold hover:bg-slate-300 transition-all duration-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteQuestionnaire}
-                disabled={deletingQuestionnaire}
-                className="flex-1 bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {deletingQuestionnaire ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Deleting...
-                  </>
-                ) : (
-                  'Delete Questionnaire'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* View Responses Modal */}
       {viewingResponsesFor && (
         <div
@@ -1344,15 +1661,7 @@ function JobDetailModal({
         </div>
       )}
 
-      {/* Questionnaire Editor Modal */}
-      <QuestionnaireEditorModal
-        isOpen={showQuestionnaireEditor}
-        onClose={handleQuestionnaireEditorClose}
-        jobId={job.job_id}
-        existingQuestionnaire={questionnaire}
-        onSave={handleQuestionnaireSaved}
-      />
-    </div>
+      </div>
   );
 }
 
@@ -1362,7 +1671,7 @@ export default function BusinessDashboardPage() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'job-postings' | 'profile'>('job-postings');
+  const [activeTab, setActiveTab] = useState<'job-postings' | 'questionnaires' | 'profile'>('job-postings');
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [showCreateJobModal, setShowCreateJobModal] = useState(false);
 
@@ -1491,6 +1800,20 @@ export default function BusinessDashboardPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
               Job Postings
+            </button>
+
+            <button
+              onClick={() => setActiveTab('questionnaires')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium ${
+                activeTab === 'questionnaires'
+                  ? 'bg-sky-50 text-sky-700'
+                  : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Questionnaires
             </button>
 
             <button
@@ -1626,6 +1949,11 @@ export default function BusinessDashboardPage() {
                 </div>
               )}
             </>
+          ) : activeTab === 'questionnaires' ? (
+            <QuestionnairesTab
+              businessProfile={businessProfile}
+              onNavigateToTab={(tab) => setActiveTab(tab as 'job-postings' | 'questionnaires' | 'profile')}
+            />
           ) : (
             <ProfileTab businessProfile={businessProfile} setBusinessProfile={setBusinessProfile} />
           )}
@@ -1645,6 +1973,8 @@ export default function BusinessDashboardPage() {
         job={selectedJob}
         onClose={() => setSelectedJob(null)}
         onScreeningSent={() => {}}
+        businessProfile={businessProfile}
+        onNavigateToQuestionnaires={() => setActiveTab('questionnaires')}
       />
     </div>
   );

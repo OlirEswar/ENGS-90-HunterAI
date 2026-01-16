@@ -418,9 +418,7 @@ export default function DashboardPage() {
               hourly_wage_maximum,
               job_description,
               job_requirements,
-              questionnaires (
-                questionnaire_id
-              )
+              questionnaire_id
             )
           `)
           .eq('user_id', user.id);
@@ -441,7 +439,7 @@ export default function DashboardPage() {
           hourlyWageMax: parseFloat(match.jobs.hourly_wage_maximum),
           description: match.jobs.job_description,
           requirements: match.jobs.job_requirements,
-          questionnaireId: match.jobs.questionnaires?.[0]?.questionnaire_id || null,
+          questionnaireId: match.jobs.questionnaire_id || null,
           questionnaireSent: match.questionnaire_sent
         }));
 
