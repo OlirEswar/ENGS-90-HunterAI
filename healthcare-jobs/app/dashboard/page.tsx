@@ -6,6 +6,167 @@ import { uploadResume } from '@/lib/api';
 import { Job, Question, CandidateAnswer } from '@/types';
 import { supabase } from '@/lib/supabase';
 
+// Label mappings for display
+const CERTIFICATION_LABELS: {[key: string]: string} = {
+  cna: 'Certified Nursing Assistant (CNA)',
+  ma: 'Medical Assistant (MA)',
+  phlebotomy: 'Phlebotomy',
+  emt: 'EMT',
+  lpn: 'LPN',
+  rn: 'RN',
+  home_health_aide: 'Home Health Aide',
+  cpr_bls: 'CPR/BLS',
+  other: 'Other'
+};
+
+const WORK_SETTING_LABELS: {[key: string]: string} = {
+  hospital: 'Hospital',
+  clinic: 'Clinic',
+  nursing_home: 'Nursing Home',
+  home_care: 'Home Care',
+  assisted_living: 'Assisted Living',
+  other: 'Other'
+};
+
+const SHIFT_LABELS: {[key: string]: string} = {
+  morning: 'Morning (6am-2pm)',
+  day: 'Day (9am-5pm)',
+  evening: 'Evening (2pm-10pm)',
+  night: 'Night (10pm-6am)',
+  overnight: 'Overnight',
+  weekends: 'Weekends'
+};
+
+const SCHEDULE_TYPE_LABELS: {[key: string]: string} = {
+  'full-time': 'Full-time',
+  'part-time': 'Part-time',
+  'per-diem': 'Per Diem',
+  'temporary': 'Temporary'
+};
+
+const JOB_PRIORITY_LABELS: {[key: string]: string} = {
+  stable_hours: 'Stable Hours',
+  higher_pay: 'Higher Pay',
+  helping_people: 'Helping People',
+  career_growth: 'Career Growth',
+  low_stress: 'Low Stress',
+  flexible_schedule: 'Flexible Schedule',
+  supportive_coworkers: 'Supportive Coworkers'
+};
+
+const PATIENT_ASSISTANCE_LABELS: {[key: string]: string} = {
+  bathing: 'Bathing',
+  toileting: 'Toileting',
+  mobility: 'Mobility',
+  feeding: 'Feeding'
+};
+
+interface QuestionnaireData {
+  work_authorized: boolean | null;
+  requires_sponsorship: boolean | null;
+  certifications: Array<{
+    type: string;
+    is_active: boolean;
+    expiration_date: string;
+    does_not_expire: boolean;
+    other_name?: string;
+  }>;
+  years_experience: string;
+  work_settings: string[];
+  has_transportation: string;
+  willing_to_travel: boolean | null;
+  max_commute: string;
+  preferred_shifts: string[];
+  willing_to_rotate: string;
+  schedule_type: string[];
+  hours_per_week: string;
+  start_availability: string;
+  work_type_preference: string;
+  environment_preferences: string[];
+  location_preference: string;
+  enjoys_patient_interaction: number;
+  enjoys_teamwork: number;
+  comfortable_with_families: number;
+  handles_emotions: number;
+  prefers_routine: number;
+  works_independently: number;
+  likes_fast_paced: number;
+  stays_calm: number;
+  handles_distress: number;
+  job_priorities: string[];
+  can_stand_long: string;
+  can_lift_50: boolean | null;
+  comfortable_assisting: string[];
+  additional_info: string;
+}
+
+const PROFILE_SECTIONS = [
+  { id: 'basic', title: 'Basic Info', icon: 'user' },
+  { id: 'authorization', title: 'Work Authorization', icon: 'shield' },
+  { id: 'certifications', title: 'Certifications', icon: 'badge' },
+  { id: 'experience', title: 'Experience', icon: 'briefcase' },
+  { id: 'transportation', title: 'Transportation', icon: 'car' },
+  { id: 'schedule', title: 'Schedule', icon: 'clock' },
+  { id: 'environment', title: 'Environment', icon: 'building' },
+  { id: 'workstyle', title: 'Work Style', icon: 'heart' },
+  { id: 'physical', title: 'Physical & More', icon: 'activity' }
+];
+
+// Option arrays for editing
+const CERTIFICATIONS = [
+  { id: 'cna', label: 'Certified Nursing Assistant (CNA)' },
+  { id: 'ma', label: 'Medical Assistant (MA)' },
+  { id: 'phlebotomy', label: 'Phlebotomy' },
+  { id: 'emt', label: 'EMT' },
+  { id: 'lpn', label: 'LPN' },
+  { id: 'rn', label: 'RN' },
+  { id: 'home_health_aide', label: 'Home Health Aide' },
+  { id: 'cpr_bls', label: 'CPR/BLS' },
+  { id: 'other', label: 'Other' }
+];
+
+const WORK_SETTINGS = [
+  { id: 'hospital', label: 'Hospital' },
+  { id: 'clinic', label: 'Clinic' },
+  { id: 'nursing_home', label: 'Nursing Home' },
+  { id: 'home_care', label: 'Home Care' },
+  { id: 'assisted_living', label: 'Assisted Living' },
+  { id: 'other', label: 'Other' }
+];
+
+const SHIFTS = [
+  { id: 'morning', label: 'Morning (6am-2pm)' },
+  { id: 'day', label: 'Day (9am-5pm)' },
+  { id: 'evening', label: 'Evening (2pm-10pm)' },
+  { id: 'night', label: 'Night (10pm-6am)' },
+  { id: 'overnight', label: 'Overnight' },
+  { id: 'weekends', label: 'Weekends' }
+];
+
+const SCHEDULE_TYPES = [
+  { id: 'full-time', label: 'Full-time' },
+  { id: 'part-time', label: 'Part-time' },
+  { id: 'per-diem', label: 'Per Diem' },
+  { id: 'temporary', label: 'Temporary' }
+];
+
+const JOB_PRIORITIES = [
+  { id: 'stable_hours', label: 'Stable Hours' },
+  { id: 'higher_pay', label: 'Higher Pay' },
+  { id: 'helping_people', label: 'Helping People' },
+  { id: 'career_growth', label: 'Career Growth' },
+  { id: 'low_stress', label: 'Low Stress' },
+  { id: 'flexible_schedule', label: 'Flexible Schedule' },
+  { id: 'supportive_coworkers', label: 'Supportive Coworkers' }
+];
+
+const PATIENT_ASSISTANCE = [
+  { id: 'bathing', label: 'Bathing' },
+  { id: 'toileting', label: 'Toileting' },
+  { id: 'mobility', label: 'Mobility' },
+  { id: 'feeding', label: 'Feeding' }
+];
+
 function ProfileTab({
   userProfile,
   setUserProfile
@@ -22,10 +183,72 @@ function ProfileTab({
   const [updating, setUpdating] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error'; text: string} | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [questionnaireData, setQuestionnaireData] = useState<QuestionnaireData | null>(null);
+  const [editData, setEditData] = useState<QuestionnaireData | null>(null);
+  const [activeSection, setActiveSection] = useState('basic');
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['basic']));
+  const [editingSections, setEditingSections] = useState<Set<string>>(new Set());
+  const [loadingQuestionnaire, setLoadingQuestionnaire] = useState(true);
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+
+  // Fetch questionnaire data
+  useEffect(() => {
+    const fetchQuestionnaireData = async () => {
+      if (!userProfile?.userId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('u_candidates')
+          .select(`
+            work_authorized,
+            requires_sponsorship,
+            certifications,
+            years_experience,
+            work_settings,
+            has_transportation,
+            willing_to_travel,
+            max_commute,
+            preferred_shifts,
+            willing_to_rotate,
+            schedule_type,
+            hours_per_week,
+            start_availability,
+            work_type_preference,
+            environment_preferences,
+            location_preference,
+            enjoys_patient_interaction,
+            enjoys_teamwork,
+            comfortable_with_families,
+            handles_emotions,
+            prefers_routine,
+            works_independently,
+            likes_fast_paced,
+            stays_calm,
+            handles_distress,
+            job_priorities,
+            can_stand_long,
+            can_lift_50,
+            comfortable_assisting,
+            additional_info
+          `)
+          .eq('user_id', userProfile.userId)
+          .single();
+
+        if (error) throw error;
+        setQuestionnaireData(data);
+        setEditData(data);
+      } catch (error) {
+        console.error('Error fetching questionnaire data:', error);
+      } finally {
+        setLoadingQuestionnaire(false);
+      }
+    };
+
+    fetchQuestionnaireData();
+  }, [userProfile?.userId]);
 
   useEffect(() => {
     if (userProfile) {
-      // Split the full name into first and last name
       const nameParts = userProfile.name.split(' ');
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
@@ -37,6 +260,293 @@ function ProfileTab({
       });
     }
   }, [userProfile]);
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(sectionId)) {
+        newSet.delete(sectionId);
+      } else {
+        newSet.add(sectionId);
+      }
+      return newSet;
+    });
+  };
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    setExpandedSections(prev => new Set([...prev, sectionId]));
+    const element = document.getElementById(`profile-section-${sectionId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const startEditing = (sectionId: string) => {
+    setEditingSections(prev => new Set([...prev, sectionId]));
+    setEditData(questionnaireData ? { ...questionnaireData } : null);
+  };
+
+  const cancelEditing = (sectionId: string) => {
+    setEditingSections(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(sectionId);
+      return newSet;
+    });
+    setEditData(questionnaireData ? { ...questionnaireData } : null);
+  };
+
+  const saveSection = async (sectionId: string) => {
+    if (!userProfile?.userId || !editData) return;
+
+    setSavingSection(sectionId);
+    setMessage(null);
+
+    try {
+      let updateData: Partial<QuestionnaireData> = {};
+
+      switch (sectionId) {
+        case 'authorization':
+          updateData = {
+            work_authorized: editData.work_authorized,
+            requires_sponsorship: editData.requires_sponsorship
+          };
+          break;
+        case 'certifications':
+          updateData = { certifications: editData.certifications };
+          break;
+        case 'experience':
+          updateData = {
+            years_experience: editData.years_experience,
+            work_settings: editData.work_settings
+          };
+          break;
+        case 'transportation':
+          updateData = {
+            has_transportation: editData.has_transportation,
+            willing_to_travel: editData.willing_to_travel,
+            max_commute: editData.max_commute
+          };
+          break;
+        case 'schedule':
+          updateData = {
+            preferred_shifts: editData.preferred_shifts,
+            willing_to_rotate: editData.willing_to_rotate,
+            schedule_type: editData.schedule_type,
+            hours_per_week: editData.hours_per_week,
+            start_availability: editData.start_availability
+          };
+          break;
+        case 'environment':
+          updateData = {
+            work_type_preference: editData.work_type_preference,
+            environment_preferences: editData.environment_preferences,
+            location_preference: editData.location_preference
+          };
+          break;
+        case 'workstyle':
+          updateData = {
+            enjoys_patient_interaction: editData.enjoys_patient_interaction,
+            enjoys_teamwork: editData.enjoys_teamwork,
+            comfortable_with_families: editData.comfortable_with_families,
+            handles_emotions: editData.handles_emotions,
+            prefers_routine: editData.prefers_routine,
+            works_independently: editData.works_independently,
+            likes_fast_paced: editData.likes_fast_paced,
+            stays_calm: editData.stays_calm,
+            handles_distress: editData.handles_distress,
+            job_priorities: editData.job_priorities
+          };
+          break;
+        case 'physical':
+          updateData = {
+            can_stand_long: editData.can_stand_long,
+            can_lift_50: editData.can_lift_50,
+            comfortable_assisting: editData.comfortable_assisting,
+            additional_info: editData.additional_info
+          };
+          break;
+      }
+
+      const { error } = await supabase
+        .from('u_candidates')
+        .update({ ...updateData, updated_at: new Date().toISOString() })
+        .eq('user_id', userProfile.userId);
+
+      if (error) throw error;
+
+      setQuestionnaireData(editData);
+      setEditingSections(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(sectionId);
+        return newSet;
+      });
+      setMessage({ type: 'success', text: 'Changes saved successfully!' });
+    } catch (error) {
+      console.error('Error saving section:', error);
+      setMessage({ type: 'error', text: 'Failed to save changes. Please try again.' });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const formatYesNo = (value: boolean | null) => {
+    if (value === null) return 'Not specified';
+    return value ? 'Yes' : 'No';
+  };
+
+  const formatValue = (value: string | null | undefined) => {
+    if (!value) return 'Not specified';
+    return value.replace(/_/g, ' ').replace(/</g, 'Less than ').replace(/\+/g, '+');
+  };
+
+  const formatArrayLabels = (arr: string[] | null | undefined, labels: {[key: string]: string}) => {
+    if (!arr || arr.length === 0) return 'None selected';
+    return arr.map(item => labels[item] || item).join(', ');
+  };
+
+  const toggleArrayValue = (arr: string[], value: string): string[] => {
+    if (arr.includes(value)) {
+      return arr.filter(v => v !== value);
+    }
+    return [...arr, value];
+  };
+
+  // Reusable UI components
+  const RadioOption = ({ selected, onClick, label }: { selected: boolean; onClick: () => void; label: string }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-2 rounded-lg border-2 transition-all duration-200 text-sm ${
+        selected
+          ? 'border-sky-500 bg-sky-50 text-sky-700 font-medium'
+          : 'border-slate-200 hover:border-slate-300 text-slate-600'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  const CheckboxOption = ({ selected, onClick, label }: { selected: boolean; onClick: () => void; label: string }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-2 rounded-lg border-2 transition-all duration-200 flex items-center gap-2 text-sm ${
+        selected
+          ? 'border-sky-500 bg-sky-50 text-sky-700 font-medium'
+          : 'border-slate-200 hover:border-slate-300 text-slate-600'
+      }`}
+    >
+      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+        selected ? 'border-sky-500 bg-sky-500' : 'border-slate-300'
+      }`}>
+        {selected && (
+          <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </div>
+      {label}
+    </button>
+  );
+
+  const SliderEdit = ({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) => (
+    <div className="flex items-center justify-between py-2">
+      <span className="text-slate-600 text-sm flex-1">{label}</span>
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map(n => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onChange(n)}
+            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
+              n === value
+                ? 'bg-sky-500 text-white'
+                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            }`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const SliderDisplay = ({ label, value }: { label: string; value: number }) => (
+    <div className="flex items-center justify-between py-2">
+      <span className="text-slate-600 text-sm">{label}</span>
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map(n => (
+          <div
+            key={n}
+            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+              n === value
+                ? 'bg-sky-500 text-white'
+                : n < value
+                ? 'bg-sky-100 text-sky-600'
+                : 'bg-slate-100 text-slate-400'
+            }`}
+          >
+            {n}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const SectionHeader = ({ id, title, isExpanded, isEditing, onEdit }: { id: string; title: string; isExpanded: boolean; isEditing?: boolean; onEdit?: () => void }) => (
+    <div className="flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors">
+      <button onClick={() => toggleSection(id)} className="flex-1 flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
+      </button>
+      <div className="flex items-center gap-2">
+        {id !== 'basic' && isExpanded && !isEditing && onEdit && (
+          <button
+            onClick={onEdit}
+            className="px-3 py-1 text-sm text-sky-600 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors font-medium"
+          >
+            Edit
+          </button>
+        )}
+        <button onClick={() => toggleSection(id)}>
+          <svg
+            className={`w-5 h-5 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+
+  const EditActions = ({ sectionId, saving }: { sectionId: string; saving: boolean }) => (
+    <div className="flex gap-3 mt-4 pt-4 border-t border-slate-200">
+      <button
+        onClick={() => cancelEditing(sectionId)}
+        disabled={saving}
+        className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition disabled:opacity-50"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={() => saveSection(sectionId)}
+        disabled={saving}
+        className="flex-1 px-4 py-2 bg-gradient-to-r from-sky-500 to-teal-500 text-white rounded-lg font-medium hover:shadow-lg transition disabled:opacity-50"
+      >
+        {saving ? 'Saving...' : 'Save Changes'}
+      </button>
+    </div>
+  );
+
+  const InfoRow = ({ label, value }: { label: string; value: string }) => (
+    <div className="flex justify-between py-2 border-b border-slate-100 last:border-0">
+      <span className="text-slate-500 text-sm">{label}</span>
+      <span className="text-slate-800 text-sm font-medium text-right max-w-[60%]">{value}</span>
+    </div>
+  );
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,173 +682,603 @@ function ProfileTab({
     }
   };
 
+  if (loadingQuestionnaire) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h2 className="text-3xl font-bold text-slate-800 mb-2">Your Profile</h2>
-        <p className="text-slate-600">Update your personal information and resume</p>
+        <p className="text-slate-600">View and manage your profile information</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8">
-        <form onSubmit={handleUpdate} className="space-y-6">
-          {message && (
-            <div className={`p-4 rounded-lg ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-700 border border-green-200'
-                : 'bg-red-50 text-red-700 border border-red-200'
-            }`}>
-              {message.text}
+      {/* Quick Navigation Tabs - Wrapping */}
+      <div className="mb-6">
+        <div className="flex flex-wrap gap-2">
+          {PROFILE_SECTIONS.map(section => (
+            <button
+              key={section.id}
+              onClick={() => scrollToSection(section.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeSection === section.id
+                  ? 'bg-sky-500 text-white shadow-md'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              {section.title}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {message && (
+        <div className={`mb-6 p-4 rounded-lg ${
+          message.type === 'success'
+            ? 'bg-green-50 text-green-700 border border-green-200'
+            : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {/* Basic Info Section */}
+        <div id="profile-section-basic" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+          <SectionHeader id="basic" title="Basic Info & Resume" isExpanded={expandedSections.has('basic')} />
+          {expandedSections.has('basic') && (
+            <div className="p-6 border-t border-slate-100">
+              <form onSubmit={handleUpdate} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="firstName" className="block text-sm font-medium text-slate-700 mb-2">
+                      First Name
+                    </label>
+                    <input
+                      type="text"
+                      id="firstName"
+                      value={formData.firstName}
+                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="lastName" className="block text-sm font-medium text-slate-700 mb-2">
+                      Last Name
+                    </label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      value={formData.lastName}
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
+                    required
+                  />
+                </div>
+
+                {/* Resume */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Resume</label>
+                  {userProfile && !resumeFile && (
+                    <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <svg className="h-8 w-8 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <div>
+                          <p className="font-medium text-slate-800">Current Resume</p>
+                          <p className="text-sm text-slate-500">{userProfile.resumePath.split('/').pop()}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleDownloadResume}
+                        className="px-4 py-2 bg-sky-100 text-sky-700 rounded-lg hover:bg-sky-200 transition font-medium text-sm flex items-center gap-2"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download
+                      </button>
+                    </div>
+                  )}
+
+                  <div
+                    className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all ${
+                      dragActive ? 'border-sky-500 bg-sky-50' : 'border-slate-300 hover:border-sky-400'
+                    }`}
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                  >
+                    <input type="file" id="resume" accept=".pdf" onChange={handleFileInput} className="hidden" />
+                    {!resumeFile ? (
+                      <div className="space-y-2">
+                        <label htmlFor="resume" className="cursor-pointer text-sky-600 hover:text-sky-700 font-semibold">
+                          Click to upload
+                        </label>
+                        <span className="text-slate-600"> or drag and drop</span>
+                        <p className="text-xs text-slate-400">PDF only (max 5MB)</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="text-slate-800 font-medium">{resumeFile.name}</div>
+                        <button type="button" onClick={() => setResumeFile(null)} className="text-sky-600 hover:text-sky-700 text-sm font-medium">
+                          Change file
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  {updating ? 'Updating...' : 'Save Changes'}
+                </button>
+              </form>
             </div>
           )}
+        </div>
 
-          {/* Name Fields */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="firstName" className="block text-sm font-medium text-slate-700 mb-2">
-                First Name
-              </label>
-              <input
-                type="text"
-                id="firstName"
-                value={formData.firstName}
-                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="lastName" className="block text-sm font-medium text-slate-700 mb-2">
-                Last Name
-              </label>
-              <input
-                type="text"
-                id="lastName"
-                value={formData.lastName}
-                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Email Field */}
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              id="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
-              required
-            />
-          </div>
-
-          {/* Resume Upload */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Resume
-            </label>
-
-            {/* Current Resume with Download Button */}
-            {userProfile && !resumeFile && (
-              <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <svg className="h-8 w-8 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <div>
-                    <p className="font-medium text-slate-800">Current Resume</p>
-                    <p className="text-sm text-slate-500">{userProfile.resumePath.split('/').pop()}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDownloadResume}
-                  className="px-4 py-2 bg-sky-100 text-sky-700 rounded-lg hover:bg-sky-200 transition font-medium text-sm flex items-center gap-2"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download
-                </button>
-              </div>
-            )}
-
-            {/* Upload New Resume */}
-            <div
-              className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${
-                dragActive
-                  ? 'border-sky-500 bg-sky-50'
-                  : 'border-slate-300 hover:border-sky-400'
-              }`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-            >
-              <input
-                type="file"
-                id="resume"
-                accept=".pdf"
-                onChange={handleFileInput}
-                className="hidden"
-              />
-
-              {!resumeFile ? (
+        {/* Work Authorization Section */}
+        <div id="profile-section-authorization" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+          <SectionHeader id="authorization" title="Work Authorization" isExpanded={expandedSections.has('authorization')} isEditing={editingSections.has('authorization')} onEdit={() => startEditing('authorization')} />
+          {expandedSections.has('authorization') && questionnaireData && (
+            <div className="p-6 border-t border-slate-100">
+              {editingSections.has('authorization') && editData ? (
                 <div className="space-y-4">
-                  <div className="flex justify-center">
-                    <svg className="h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Authorized to work in the US?</p>
+                    <div className="flex gap-3">
+                      <RadioOption selected={editData.work_authorized === true} onClick={() => setEditData({...editData, work_authorized: true})} label="Yes" />
+                      <RadioOption selected={editData.work_authorized === false} onClick={() => setEditData({...editData, work_authorized: false})} label="No" />
+                    </div>
                   </div>
                   <div>
-                    <label
-                      htmlFor="resume"
-                      className="cursor-pointer text-sky-600 hover:text-sky-700 font-semibold"
-                    >
-                      Click to upload
-                    </label>
-                    <span className="text-slate-600"> or drag and drop</span>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Requires employer sponsorship?</p>
+                    <div className="flex gap-3">
+                      <RadioOption selected={editData.requires_sponsorship === true} onClick={() => setEditData({...editData, requires_sponsorship: true})} label="Yes" />
+                      <RadioOption selected={editData.requires_sponsorship === false} onClick={() => setEditData({...editData, requires_sponsorship: false})} label="No" />
+                    </div>
                   </div>
-                  <p className="text-sm text-slate-500">Upload a new resume to replace your current one</p>
-                  <p className="text-xs text-slate-400">PDF only (max 5MB)</p>
+                  <EditActions sectionId="authorization" saving={savingSection === 'authorization'} />
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="flex justify-center">
-                    <svg className="h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div className="text-slate-800 font-medium">{resumeFile.name}</div>
-                  <div className="text-sm text-slate-500">
-                    {(resumeFile.size / 1024 / 1024).toFixed(2)} MB
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setResumeFile(null)}
-                    className="text-sky-600 hover:text-sky-700 text-sm font-medium"
-                  >
-                    Change file
-                  </button>
-                </div>
+                <>
+                  <InfoRow label="Authorized to work in US" value={formatYesNo(questionnaireData.work_authorized)} />
+                  <InfoRow label="Requires sponsorship" value={formatYesNo(questionnaireData.requires_sponsorship)} />
+                </>
               )}
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={updating}
-            className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-          >
-            {updating ? 'Updating...' : 'Update Profile'}
-          </button>
-        </form>
+        {/* Certifications Section */}
+        <div id="profile-section-certifications" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+          <SectionHeader id="certifications" title="Certifications" isExpanded={expandedSections.has('certifications')} isEditing={editingSections.has('certifications')} onEdit={() => startEditing('certifications')} />
+          {expandedSections.has('certifications') && questionnaireData && (
+            <div className="p-6 border-t border-slate-100">
+              {editingSections.has('certifications') && editData ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-600 mb-2">Select your certifications:</p>
+                  <div className="space-y-3">
+                    {CERTIFICATIONS.map(cert => {
+                      const selectedCert = editData.certifications?.find(c => c.type === cert.id);
+                      const isSelected = !!selectedCert;
+                      return (
+                        <div key={cert.id} className={`rounded-lg border-2 transition-all ${isSelected ? 'border-sky-500 bg-sky-50' : 'border-slate-200'}`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setEditData({...editData, certifications: editData.certifications.filter(c => c.type !== cert.id)});
+                              } else {
+                                setEditData({...editData, certifications: [...(editData.certifications || []), { type: cert.id, is_active: true, expiration_date: '', does_not_expire: false }]});
+                              }
+                            }}
+                            className="w-full px-4 py-3 flex items-center gap-3 text-left"
+                          >
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-sky-500 bg-sky-500' : 'border-slate-300'}`}>
+                              {isSelected && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                            </div>
+                            <span className={`font-medium ${isSelected ? 'text-sky-700' : 'text-slate-600'}`}>{cert.label}</span>
+                          </button>
+                          {isSelected && selectedCert && (
+                            <div className="px-4 pb-3 pt-2 border-t border-sky-200 space-y-2">
+                              {cert.id === 'other' && (
+                                <input type="text" placeholder="Certification name" value={selectedCert.other_name || ''} onChange={(e) => setEditData({...editData, certifications: editData.certifications.map(c => c.type === cert.id ? {...c, other_name: e.target.value} : c)})} className="w-full px-3 py-2 rounded border border-slate-300 text-sm" />
+                              )}
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => setEditData({...editData, certifications: editData.certifications.map(c => c.type === cert.id ? {...c, is_active: true} : c)})} className={`px-3 py-1 rounded text-xs font-medium ${selectedCert.is_active ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-600'}`}>Active</button>
+                                  <button type="button" onClick={() => setEditData({...editData, certifications: editData.certifications.map(c => c.type === cert.id ? {...c, is_active: false} : c)})} className={`px-3 py-1 rounded text-xs font-medium ${!selectedCert.is_active ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600'}`}>Inactive</button>
+                                </div>
+                                {!selectedCert.does_not_expire && <input type="date" value={selectedCert.expiration_date} onChange={(e) => setEditData({...editData, certifications: editData.certifications.map(c => c.type === cert.id ? {...c, expiration_date: e.target.value} : c)})} className="px-2 py-1 rounded border border-slate-300 text-sm" />}
+                                <label className="flex items-center gap-2 text-sm text-slate-600">
+                                  <input type="checkbox" checked={selectedCert.does_not_expire} onChange={(e) => setEditData({...editData, certifications: editData.certifications.map(c => c.type === cert.id ? {...c, does_not_expire: e.target.checked, expiration_date: ''} : c)})} className="w-4 h-4 rounded" />
+                                  No expiration
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <EditActions sectionId="certifications" saving={savingSection === 'certifications'} />
+                </div>
+              ) : (
+                questionnaireData.certifications && questionnaireData.certifications.length > 0 ? (
+                  <div className="space-y-3">
+                    {questionnaireData.certifications.map((cert, index) => (
+                      <div key={index} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-slate-800">{cert.type === 'other' ? cert.other_name : CERTIFICATION_LABELS[cert.type] || cert.type}</span>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${cert.is_active ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{cert.is_active ? 'Active' : 'Inactive'}</span>
+                        </div>
+                        <p className="text-sm text-slate-500">{cert.does_not_expire ? 'Does not expire' : `Expires: ${cert.expiration_date || 'Not specified'}`}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-500 text-sm italic">No certifications listed</p>
+                )
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Experience Section */}
+        <div id="profile-section-experience" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+          <SectionHeader id="experience" title="Experience" isExpanded={expandedSections.has('experience')} isEditing={editingSections.has('experience')} onEdit={() => startEditing('experience')} />
+          {expandedSections.has('experience') && questionnaireData && (
+            <div className="p-6 border-t border-slate-100">
+              {editingSections.has('experience') && editData ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Years of healthcare experience</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{v:'none',l:'None'},{v:'<1',l:'Less than 1'},{v:'1-3',l:'1-3 years'},{v:'3-5',l:'3-5 years'},{v:'5+',l:'5+ years'}].map(opt => (
+                        <RadioOption key={opt.v} selected={editData.years_experience === opt.v} onClick={() => setEditData({...editData, years_experience: opt.v})} label={opt.l} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Work settings (select all that apply)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {WORK_SETTINGS.map(s => (
+                        <CheckboxOption key={s.id} selected={(editData.work_settings || []).includes(s.id)} onClick={() => setEditData({...editData, work_settings: toggleArrayValue(editData.work_settings || [], s.id)})} label={s.label} />
+                      ))}
+                    </div>
+                  </div>
+                  <EditActions sectionId="experience" saving={savingSection === 'experience'} />
+                </div>
+              ) : (
+                <>
+                  <InfoRow label="Years of experience" value={formatValue(questionnaireData.years_experience)} />
+                  <InfoRow label="Work settings" value={formatArrayLabels(questionnaireData.work_settings, WORK_SETTING_LABELS)} />
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Transportation Section */}
+        <div id="profile-section-transportation" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+          <SectionHeader id="transportation" title="Transportation" isExpanded={expandedSections.has('transportation')} isEditing={editingSections.has('transportation')} onEdit={() => startEditing('transportation')} />
+          {expandedSections.has('transportation') && questionnaireData && (
+            <div className="p-6 border-t border-slate-100">
+              {editingSections.has('transportation') && editData ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Do you have reliable transportation?</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{v:'yes',l:'Yes'},{v:'no',l:'No'},{v:'sometimes',l:'Sometimes'}].map(opt => (
+                        <RadioOption key={opt.v} selected={editData.has_transportation === opt.v} onClick={() => setEditData({...editData, has_transportation: opt.v})} label={opt.l} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Willing to travel between sites?</p>
+                    <div className="flex gap-3">
+                      <RadioOption selected={editData.willing_to_travel === true} onClick={() => setEditData({...editData, willing_to_travel: true})} label="Yes" />
+                      <RadioOption selected={editData.willing_to_travel === false} onClick={() => setEditData({...editData, willing_to_travel: false})} label="No" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Maximum commute distance</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{v:'<5',l:'Less than 5 miles'},{v:'5-10',l:'5-10 miles'},{v:'10-20',l:'10-20 miles'},{v:'20+',l:'20+ miles'}].map(opt => (
+                        <RadioOption key={opt.v} selected={editData.max_commute === opt.v} onClick={() => setEditData({...editData, max_commute: opt.v})} label={opt.l} />
+                      ))}
+                    </div>
+                  </div>
+                  <EditActions sectionId="transportation" saving={savingSection === 'transportation'} />
+                </div>
+              ) : (
+                <>
+                  <InfoRow label="Reliable transportation" value={formatValue(questionnaireData.has_transportation)} />
+                  <InfoRow label="Willing to travel between sites" value={formatYesNo(questionnaireData.willing_to_travel)} />
+                  <InfoRow label="Maximum commute" value={formatValue(questionnaireData.max_commute) + ' miles'} />
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Schedule Section */}
+        <div id="profile-section-schedule" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+          <SectionHeader id="schedule" title="Schedule Preferences" isExpanded={expandedSections.has('schedule')} isEditing={editingSections.has('schedule')} onEdit={() => startEditing('schedule')} />
+          {expandedSections.has('schedule') && questionnaireData && (
+            <div className="p-6 border-t border-slate-100">
+              {editingSections.has('schedule') && editData ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Preferred shifts (select all)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {SHIFTS.map(s => (
+                        <CheckboxOption key={s.id} selected={(editData.preferred_shifts || []).includes(s.id)} onClick={() => setEditData({...editData, preferred_shifts: toggleArrayValue(editData.preferred_shifts || [], s.id)})} label={s.label} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Willing to rotate shifts?</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{v:'yes',l:'Yes'},{v:'no',l:'No'},{v:'prefer_not',l:'Prefer not to'}].map(opt => (
+                        <RadioOption key={opt.v} selected={editData.willing_to_rotate === opt.v} onClick={() => setEditData({...editData, willing_to_rotate: opt.v})} label={opt.l} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Schedule type (select all)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {SCHEDULE_TYPES.map(s => (
+                        <CheckboxOption key={s.id} selected={(editData.schedule_type || []).includes(s.id)} onClick={() => setEditData({...editData, schedule_type: toggleArrayValue(editData.schedule_type || [], s.id)})} label={s.label} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Hours per week</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{v:'<20',l:'Less than 20'},{v:'20-30',l:'20-30'},{v:'30-40',l:'30-40'},{v:'40+',l:'40+'}].map(opt => (
+                        <RadioOption key={opt.v} selected={editData.hours_per_week === opt.v} onClick={() => setEditData({...editData, hours_per_week: opt.v})} label={opt.l} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">When can you start?</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{v:'immediately',l:'Immediately'},{v:'2_weeks',l:'Within 2 weeks'},{v:'1_month',l:'1 month'},{v:'2+_months',l:'2+ months'}].map(opt => (
+                        <RadioOption key={opt.v} selected={editData.start_availability === opt.v} onClick={() => setEditData({...editData, start_availability: opt.v})} label={opt.l} />
+                      ))}
+                    </div>
+                  </div>
+                  <EditActions sectionId="schedule" saving={savingSection === 'schedule'} />
+                </div>
+              ) : (
+                <>
+                  <InfoRow label="Preferred shifts" value={formatArrayLabels(questionnaireData.preferred_shifts, SHIFT_LABELS)} />
+                  <InfoRow label="Willing to rotate shifts" value={formatValue(questionnaireData.willing_to_rotate)} />
+                  <InfoRow label="Schedule type" value={formatArrayLabels(questionnaireData.schedule_type, SCHEDULE_TYPE_LABELS)} />
+                  <InfoRow label="Hours per week" value={formatValue(questionnaireData.hours_per_week)} />
+                  <InfoRow label="Available to start" value={formatValue(questionnaireData.start_availability)} />
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Environment Section */}
+        <div id="profile-section-environment" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+          <SectionHeader id="environment" title="Work Environment" isExpanded={expandedSections.has('environment')} isEditing={editingSections.has('environment')} onEdit={() => startEditing('environment')} />
+          {expandedSections.has('environment') && questionnaireData && (
+            <div className="p-6 border-t border-slate-100">
+              {editingSections.has('environment') && editData ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Work type preference</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{v:'direct_patient_care',l:'Direct Patient Care'},{v:'administrative',l:'Administrative'},{v:'lab_technical',l:'Lab/Technical'},{v:'mix',l:'Mix of Both'}].map(opt => (
+                        <RadioOption key={opt.v} selected={editData.work_type_preference === opt.v} onClick={() => setEditData({...editData, work_type_preference: opt.v})} label={opt.l} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Preferred environments (select all)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {WORK_SETTINGS.filter(s => s.id !== 'other').map(s => (
+                        <CheckboxOption key={s.id} selected={(editData.environment_preferences || []).includes(s.id)} onClick={() => setEditData({...editData, environment_preferences: toggleArrayValue(editData.environment_preferences || [], s.id)})} label={s.label} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Location preference</p>
+                    <div className="flex flex-wrap gap-2">
+                      <RadioOption selected={editData.location_preference === 'consistent'} onClick={() => setEditData({...editData, location_preference: 'consistent'})} label="One consistent location" />
+                      <RadioOption selected={editData.location_preference === 'multiple'} onClick={() => setEditData({...editData, location_preference: 'multiple'})} label="Multiple locations" />
+                    </div>
+                  </div>
+                  <EditActions sectionId="environment" saving={savingSection === 'environment'} />
+                </div>
+              ) : (
+                <>
+                  <InfoRow label="Work type preference" value={formatValue(questionnaireData.work_type_preference)} />
+                  <InfoRow label="Preferred environments" value={formatArrayLabels(questionnaireData.environment_preferences, WORK_SETTING_LABELS)} />
+                  <InfoRow label="Location preference" value={questionnaireData.location_preference === 'consistent' ? 'One consistent location' : 'Multiple locations / Visiting patients'} />
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Work Style Section */}
+        <div id="profile-section-workstyle" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+          <SectionHeader id="workstyle" title="Work Style & Preferences" isExpanded={expandedSections.has('workstyle')} isEditing={editingSections.has('workstyle')} onEdit={() => startEditing('workstyle')} />
+          {expandedSections.has('workstyle') && questionnaireData && (
+            <div className="p-6 border-t border-slate-100 space-y-6">
+              {editingSections.has('workstyle') && editData ? (
+                <>
+                  <div>
+                    <h4 className="font-medium text-slate-800 mb-3">Social & Interaction Style</h4>
+                    <div className="space-y-1">
+                      <SliderEdit label="I enjoy working with patients" value={editData.enjoys_patient_interaction || 3} onChange={(v) => setEditData({...editData, enjoys_patient_interaction: v})} />
+                      <SliderEdit label="I enjoy teamwork" value={editData.enjoys_teamwork || 3} onChange={(v) => setEditData({...editData, enjoys_teamwork: v})} />
+                      <SliderEdit label="Comfortable with families" value={editData.comfortable_with_families || 3} onChange={(v) => setEditData({...editData, comfortable_with_families: v})} />
+                      <SliderEdit label="Handle emotional situations" value={editData.handles_emotions || 3} onChange={(v) => setEditData({...editData, handles_emotions: v})} />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-slate-800 mb-3">Structure & Autonomy</h4>
+                    <div className="space-y-1">
+                      <SliderEdit label="Prefer routine" value={editData.prefers_routine || 3} onChange={(v) => setEditData({...editData, prefers_routine: v})} />
+                      <SliderEdit label="Work independently" value={editData.works_independently || 3} onChange={(v) => setEditData({...editData, works_independently: v})} />
+                      <SliderEdit label="Like fast-paced environments" value={editData.likes_fast_paced || 3} onChange={(v) => setEditData({...editData, likes_fast_paced: v})} />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-slate-800 mb-3">Stress & Pressure</h4>
+                    <div className="space-y-1">
+                      <SliderEdit label="Stay calm under pressure" value={editData.stays_calm || 3} onChange={(v) => setEditData({...editData, stays_calm: v})} />
+                      <SliderEdit label="Handle distress" value={editData.handles_distress || 3} onChange={(v) => setEditData({...editData, handles_distress: v})} />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-slate-800 mb-3">Job Priorities (pick up to 3)</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {JOB_PRIORITIES.map(p => (
+                        <CheckboxOption key={p.id} selected={(editData.job_priorities || []).includes(p.id)} onClick={() => {
+                          const current = editData.job_priorities || [];
+                          if (current.includes(p.id)) {
+                            setEditData({...editData, job_priorities: current.filter(x => x !== p.id)});
+                          } else if (current.length < 3) {
+                            setEditData({...editData, job_priorities: [...current, p.id]});
+                          }
+                        }} label={p.label} />
+                      ))}
+                    </div>
+                  </div>
+                  <EditActions sectionId="workstyle" saving={savingSection === 'workstyle'} />
+                </>
+              ) : (
+                <>
+                  <div>
+                    <h4 className="font-medium text-slate-800 mb-3">Social & Interaction Style</h4>
+                    <div className="space-y-1">
+                      <SliderDisplay label="Enjoy working with patients" value={questionnaireData.enjoys_patient_interaction || 3} />
+                      <SliderDisplay label="Enjoy teamwork" value={questionnaireData.enjoys_teamwork || 3} />
+                      <SliderDisplay label="Comfortable with families" value={questionnaireData.comfortable_with_families || 3} />
+                      <SliderDisplay label="Handle emotional situations" value={questionnaireData.handles_emotions || 3} />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-slate-800 mb-3">Structure & Autonomy</h4>
+                    <div className="space-y-1">
+                      <SliderDisplay label="Prefer routine" value={questionnaireData.prefers_routine || 3} />
+                      <SliderDisplay label="Work independently" value={questionnaireData.works_independently || 3} />
+                      <SliderDisplay label="Like fast-paced environments" value={questionnaireData.likes_fast_paced || 3} />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-slate-800 mb-3">Stress & Pressure</h4>
+                    <div className="space-y-1">
+                      <SliderDisplay label="Stay calm under pressure" value={questionnaireData.stays_calm || 3} />
+                      <SliderDisplay label="Handle distress" value={questionnaireData.handles_distress || 3} />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-slate-800 mb-3">Job Priorities</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {questionnaireData.job_priorities && questionnaireData.job_priorities.length > 0 ? (
+                        questionnaireData.job_priorities.map(priority => (
+                          <span key={priority} className="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-sm font-medium">{JOB_PRIORITY_LABELS[priority] || priority}</span>
+                        ))
+                      ) : (
+                        <span className="text-slate-500 text-sm italic">None selected</span>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Physical & Additional Info Section */}
+        <div id="profile-section-physical" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+          <SectionHeader id="physical" title="Physical Requirements & Additional Info" isExpanded={expandedSections.has('physical')} isEditing={editingSections.has('physical')} onEdit={() => startEditing('physical')} />
+          {expandedSections.has('physical') && questionnaireData && (
+            <div className="p-6 border-t border-slate-100">
+              {editingSections.has('physical') && editData ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Can you stand for long periods?</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{v:'yes',l:'Yes'},{v:'no',l:'No'},{v:'sometimes',l:'Sometimes'}].map(opt => (
+                        <RadioOption key={opt.v} selected={editData.can_stand_long === opt.v} onClick={() => setEditData({...editData, can_stand_long: opt.v})} label={opt.l} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Can you lift 25-50 lbs?</p>
+                    <div className="flex gap-3">
+                      <RadioOption selected={editData.can_lift_50 === true} onClick={() => setEditData({...editData, can_lift_50: true})} label="Yes" />
+                      <RadioOption selected={editData.can_lift_50 === false} onClick={() => setEditData({...editData, can_lift_50: false})} label="No" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Comfortable assisting patients with (select all)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {PATIENT_ASSISTANCE.map(p => (
+                        <CheckboxOption key={p.id} selected={(editData.comfortable_assisting || []).includes(p.id)} onClick={() => setEditData({...editData, comfortable_assisting: toggleArrayValue(editData.comfortable_assisting || [], p.id)})} label={p.label} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Additional Information</p>
+                    <textarea value={editData.additional_info || ''} onChange={(e) => setEditData({...editData, additional_info: e.target.value})} rows={3} className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 outline-none resize-none text-sm" placeholder="Anything else you'd like us to know..." />
+                  </div>
+                  <EditActions sectionId="physical" saving={savingSection === 'physical'} />
+                </div>
+              ) : (
+                <>
+                  <InfoRow label="Can stand for long periods" value={formatValue(questionnaireData.can_stand_long)} />
+                  <InfoRow label="Can lift 25-50 lbs" value={formatYesNo(questionnaireData.can_lift_50)} />
+                  <InfoRow label="Comfortable assisting with" value={formatArrayLabels(questionnaireData.comfortable_assisting, PATIENT_ASSISTANCE_LABELS)} />
+                  {questionnaireData.additional_info && (
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      <p className="text-sm font-medium text-slate-700 mb-2">Additional Information</p>
+                      <p className="text-slate-600 text-sm bg-slate-50 p-3 rounded-lg">{questionnaireData.additional_info}</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
