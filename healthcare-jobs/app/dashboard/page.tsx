@@ -513,16 +513,22 @@ export default function DashboardPage() {
         return;
       }
 
-      // Check if user has uploaded a resume
+      // Check if user has uploaded a resume and completed profile
       const { data: candidateData } = await supabase
         .from('u_candidates')
-        .select('name, email, resume, user_id')
+        .select('name, email, resume, user_id, profile_completed')
         .eq('user_id', user.id)
         .single();
 
       if (!candidateData?.resume) {
         // No resume uploaded, redirect to upload page
         router.push('/upload-resume');
+        return;
+      }
+
+      if (!candidateData?.profile_completed) {
+        // Profile not completed, redirect to questionnaire
+        router.push('/signup/questionnaire');
         return;
       }
 

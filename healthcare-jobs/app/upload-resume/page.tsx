@@ -142,8 +142,8 @@ export default function UploadResumePage() {
 
       console.log('Successfully updated candidate record:', updateData);
 
-      // Success! Redirect to preferences page
-      router.push('/preferences');
+      // Success! Redirect to questionnaire page
+      router.push('/signup/questionnaire');
     } catch (err) {
       console.error('Unexpected error:', err);
       setError('An unexpected error occurred. Please try again.');

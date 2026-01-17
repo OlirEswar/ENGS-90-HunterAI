@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { registerUser } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
 const departments = [
   'Nursing',
@@ -23,6 +23,7 @@ const departments = [
 export default function PreferencesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [preferences, setPreferences] = useState({
     location: '',
     desiredSalary: '',
@@ -42,17 +43,108 @@ export default function PreferencesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
 
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      // Get profile data from session storage
       const existingData = sessionStorage.getItem('signupData');
       const signupData = existingData ? JSON.parse(existingData) : {};
-      const completeData = { ...signupData, ...preferences };
+      const profileData = signupData.profile || {};
 
-      await registerUser(completeData);
+      // Prepare the update object with all profile fields
+      const updateData: Record<string, any> = {
+        // Profile completion flag
+        profile_completed: true,
+
+        // Identity & Work Authorization
+        work_authorized: profileData.work_authorized,
+        requires_sponsorship: profileData.requires_sponsorship,
+
+        // Certifications (JSONB)
+        certifications: profileData.certifications || [],
+
+        // Experience
+        years_experience: profileData.years_experience,
+        work_settings: profileData.work_settings || [],
+
+        // Transportation & Location
+        has_transportation: profileData.has_transportation,
+        willing_to_travel: profileData.willing_to_travel,
+        max_commute: profileData.max_commute,
+
+        // Shifts
+        preferred_shifts: profileData.preferred_shifts || [],
+        willing_to_rotate: profileData.willing_to_rotate,
+
+        // Hours
+        schedule_type: profileData.schedule_type || [],
+        hours_per_week: profileData.hours_per_week,
+
+        // Start Date
+        start_availability: profileData.start_availability,
+
+        // Environment
+        work_type_preference: profileData.work_type_preference,
+        environment_preferences: profileData.environment_preferences || [],
+        location_preference: profileData.location_preference,
+
+        // Social & Interaction Style (1-5 scale)
+        enjoys_patient_interaction: profileData.enjoys_patient_interaction,
+        enjoys_teamwork: profileData.enjoys_teamwork,
+        comfortable_with_families: profileData.comfortable_with_families,
+        handles_emotions: profileData.handles_emotions,
+
+        // Structure vs Autonomy (1-5 scale)
+        prefers_routine: profileData.prefers_routine,
+        works_independently: profileData.works_independently,
+        likes_fast_paced: profileData.likes_fast_paced,
+
+        // Stress & Pressure (1-5 scale)
+        stays_calm: profileData.stays_calm,
+        handles_distress: profileData.handles_distress,
+
+        // Motivation
+        job_priorities: profileData.job_priorities || [],
+
+        // Physical Ability
+        can_stand_long: profileData.can_stand_long,
+        can_lift_50: profileData.can_lift_50,
+        comfortable_assisting: profileData.comfortable_assisting || [],
+
+        // Open Ended
+        additional_info: profileData.additional_info || null,
+
+        // Update timestamp
+        updated_at: new Date().toISOString()
+      };
+
+      // Update the candidate profile in the database
+      const { error: updateError } = await supabase
+        .from('u_candidates')
+        .update(updateData)
+        .eq('user_id', user.id);
+
+      if (updateError) {
+        console.error('Error updating profile:', updateError);
+        setError('Failed to save profile. Please try again.');
+        return;
+      }
+
+      // Clear session storage
       sessionStorage.removeItem('signupData');
+
+      // Redirect to dashboard
       router.push('/dashboard');
-    } catch (error) {
-      console.error('Error:', error);
+    } catch (err) {
+      console.error('Error:', err);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -69,8 +161,8 @@ export default function PreferencesPage() {
               </svg>
             </div>
           </Link>
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Set Your Preferences</h1>
-          <p className="text-slate-600">Step 3 of 3: Help us find your perfect match</p>
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">Almost Done!</h1>
+          <p className="text-slate-600">Step 3 of 3: Final preferences</p>
 
           <div className="flex justify-center gap-2 mt-4">
             <div className="h-2 w-16 rounded-full bg-sky-500"></div>
@@ -80,6 +172,12 @@ export default function PreferencesPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="location" className="block text-sm font-medium text-slate-700 mb-2">
@@ -166,7 +264,7 @@ export default function PreferencesPage() {
                 disabled={loading || preferences.preferredDepartments.length === 0}
                 className="flex-1 bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                {loading ? 'Creating Profile...' : 'Complete Setup'}
+                {loading ? 'Saving Profile...' : 'Complete Setup'}
               </button>
             </div>
           </form>
