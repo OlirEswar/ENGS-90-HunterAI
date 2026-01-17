@@ -28,6 +28,7 @@ interface MatchedCandidate {
   user_id: string;
   questionnaire_sent: boolean;
   match_failed: boolean;
+  has_responses: boolean;
   candidate: {
     user_id: string;
     name: string;
@@ -1182,11 +1183,43 @@ function JobDetailModal({
         return;
       }
 
+      // Check which candidates have submitted responses
+      const candidateIds = (data || []).map((match: any) => match.user_id);
+      let responseCounts: { [key: string]: number } = {};
+
+      if (candidateIds.length > 0 && job.questionnaire_id) {
+        // Get question IDs for this job's questionnaire
+        const { data: questions } = await supabase
+          .from('job_questions')
+          .select('question_id')
+          .eq('questionnaire_id', job.questionnaire_id);
+
+        if (questions && questions.length > 0) {
+          const questionIds = questions.map(q => q.question_id);
+
+          // Count non-empty answers for each candidate
+          const { data: answers } = await supabase
+            .from('candidate_answers')
+            .select('candidate_id, answer')
+            .in('candidate_id', candidateIds)
+            .in('question_id', questionIds);
+
+          if (answers) {
+            answers.forEach((a: any) => {
+              if (a.answer && a.answer.trim() !== '') {
+                responseCounts[a.candidate_id] = (responseCounts[a.candidate_id] || 0) + 1;
+              }
+            });
+          }
+        }
+      }
+
       const transformedCandidates: MatchedCandidate[] = (data || []).map((match: any) => ({
         match_id: match.match_id,
         user_id: match.user_id,
         questionnaire_sent: match.questionnaire_sent,
         match_failed: match.match_failed,
+        has_responses: (responseCounts[match.user_id] || 0) > 0,
         candidate: {
           user_id: match.u_candidates.user_id,
           name: match.u_candidates.name,
@@ -1578,93 +1611,97 @@ function JobDetailModal({
                     key={candidate.match_id}
                     className="bg-slate-50 rounded-lg p-4 border border-slate-200"
                   >
-                    <div className="flex items-center justify-between">
+                    {/* Candidate info row */}
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 bg-gradient-to-br from-sky-100 to-teal-100 rounded-full flex items-center justify-center">
+                        <div className="h-12 w-12 bg-gradient-to-br from-sky-100 to-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
                           <svg className="h-6 w-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                           </svg>
                         </div>
-                        <div>
-                          <h4 className="font-semibold text-slate-800">{candidate.candidate.name}</h4>
-                          <p className="text-sm text-slate-600">{candidate.candidate.email}</p>
+                        <div className="min-w-0">
+                          <h4 className="font-semibold text-slate-800 truncate">{candidate.candidate.name}</h4>
+                          <p className="text-sm text-slate-600 truncate">{candidate.candidate.email}</p>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-3">
-                        {candidate.candidate.resume && (
-                          <button
-                            onClick={() => handleDownloadResume(candidate)}
-                            disabled={downloadingResume === candidate.user_id}
-                            className="px-4 py-2 bg-sky-100 text-sky-700 rounded-lg hover:bg-sky-200 transition font-medium text-sm flex items-center gap-2 disabled:opacity-50"
-                          >
-                            {downloadingResume === candidate.user_id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-700"></div>
-                            ) : (
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                            )}
-                            Resume
-                          </button>
+                      <button
+                        onClick={() => handleNotInterested(candidate)}
+                        disabled={markingNotInterested === candidate.match_id}
+                        className="flex-shrink-0 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition disabled:opacity-50"
+                        title="Not interested in this candidate"
+                      >
+                        {markingNotInterested === candidate.match_id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-400"></div>
+                        ) : (
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                         )}
+                      </button>
+                    </div>
 
-                        {candidate.questionnaire_sent ? (
-                          <>
+                    {/* Action buttons row */}
+                    <div className="flex flex-wrap items-center gap-2 ml-16">
+                      {candidate.candidate.resume && (
+                        <button
+                          onClick={() => handleDownloadResume(candidate)}
+                          disabled={downloadingResume === candidate.user_id}
+                          className="h-9 px-4 bg-sky-100 text-sky-700 rounded-lg hover:bg-sky-200 transition font-medium text-sm flex items-center gap-2 disabled:opacity-50"
+                        >
+                          {downloadingResume === candidate.user_id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-700"></div>
+                          ) : (
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          )}
+                          Resume
+                        </button>
+                      )}
+
+                      {candidate.questionnaire_sent ? (
+                        <>
+                          <span className="h-9 px-4 bg-green-100 text-green-700 rounded-lg font-medium text-sm flex items-center gap-2">
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Screening Sent
+                          </span>
+                          {candidate.has_responses && (
                             <button
                               onClick={() => handleViewResponses(candidate)}
-                              className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition font-medium text-sm flex items-center gap-2"
+                              className="h-9 px-4 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition font-medium text-sm flex items-center gap-2"
                             >
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                               View Responses
                             </button>
-                            <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-medium text-sm flex items-center gap-2">
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              Screening Sent
-                            </span>
-                          </>
-                        ) : questionnaire ? (
-                          <button
-                            onClick={() => handleSendScreening(candidate.match_id)}
-                            disabled={sendingScreening === candidate.match_id}
-                            className="px-4 py-2 bg-gradient-to-r from-sky-500 to-teal-500 text-white rounded-lg hover:shadow-lg transition font-medium text-sm flex items-center gap-2 disabled:opacity-50"
-                          >
-                            {sendingScreening === candidate.match_id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            ) : (
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                              </svg>
-                            )}
-                            Send Screening
-                          </button>
-                        ) : (
-                          <span className="px-4 py-2 bg-slate-100 text-slate-500 rounded-lg font-medium text-sm flex items-center gap-2 cursor-not-allowed" title="Create a questionnaire first">
+                          )}
+                        </>
+                      ) : questionnaire ? (
+                        <button
+                          onClick={() => handleSendScreening(candidate.match_id)}
+                          disabled={sendingScreening === candidate.match_id}
+                          className="h-9 px-4 bg-gradient-to-r from-sky-500 to-teal-500 text-white rounded-lg hover:shadow-lg transition font-medium text-sm flex items-center gap-2 disabled:opacity-50"
+                        >
+                          {sendingScreening === candidate.match_id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          ) : (
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                             </svg>
-                            Send Screening
-                          </span>
-                        )}
-                        <button
-                          onClick={() => handleNotInterested(candidate)}
-                          disabled={markingNotInterested === candidate.match_id}
-                          className="px-3 py-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition text-sm disabled:opacity-50"
-                          title="Not interested in this candidate"
-                        >
-                          {markingNotInterested === candidate.match_id ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-400"></div>
-                          ) : (
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
                           )}
+                          Send Screening
                         </button>
-                      </div>
+                      ) : (
+                        <span className="h-9 px-4 bg-slate-100 text-slate-500 rounded-lg font-medium text-sm flex items-center gap-2 cursor-not-allowed" title="Create a questionnaire first">
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                          </svg>
+                          Send Screening
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
