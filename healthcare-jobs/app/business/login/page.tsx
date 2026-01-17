@@ -111,9 +111,9 @@ export default function BusinessLoginPage() {
                 <input type="checkbox" className="rounded border-slate-300 text-sky-500 focus:ring-sky-500" />
                 <span className="text-slate-600">Remember me</span>
               </label>
-              <a href="#" className="text-sky-600 hover:text-sky-700 font-medium">
+              <Link href="/business/forgot-password" className="text-sky-600 hover:text-sky-700 font-medium">
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             <button
