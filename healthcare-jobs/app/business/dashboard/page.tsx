@@ -1100,6 +1100,36 @@ function JobDetailModal({
     }
   }, [job]);
 
+  // Subscribe to candidate profile changes in real-time
+  useEffect(() => {
+    if (!job || candidates.length === 0) return;
+
+    const candidateIds = candidates.map(c => c.user_id);
+
+    const channel = supabase
+      .channel(`job-${job.job_id}-candidates`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'u_candidates'
+        },
+        (payload) => {
+          const record = payload.new as { user_id?: string } | null;
+          const oldRecord = payload.old as { user_id?: string } | null;
+          if (candidateIds.includes(record?.user_id || '') || candidateIds.includes(oldRecord?.user_id || '')) {
+            fetchCandidates();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [job, candidates.length]);
+
   const fetchCandidates = async () => {
     if (!job) return;
 
