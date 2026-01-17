@@ -10,6 +10,8 @@ export interface Job {
   requirements: string[];
   questionnaireId?: string;
   questionnaireSent?: boolean;
+  matchId?: string;
+  matchFailed?: boolean;
 }
 
 export interface Question {

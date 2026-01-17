@@ -1302,6 +1302,36 @@ export default function DashboardPage() {
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [currentQuestionnaireId, setCurrentQuestionnaireId] = useState<string | null>(null);
+  const [markingNotInterested, setMarkingNotInterested] = useState<string | null>(null);
+
+  // Handle "Not Interested" action
+  const handleNotInterested = async (job: Job) => {
+    if (!job.matchId) return;
+
+    setMarkingNotInterested(job.matchId);
+    try {
+      const { error } = await supabase
+        .from('matches')
+        .update({ match_failed: true })
+        .eq('match_id', job.matchId);
+
+      if (error) throw error;
+
+      // Remove the job from local state
+      setJobs(prev => prev.filter(j => j.matchId !== job.matchId));
+      setScreeningInvitations(prev => prev.filter(j => j.matchId !== job.matchId));
+      setRegularMatches(prev => prev.filter(j => j.matchId !== job.matchId));
+
+      // Close the modal if this job was selected
+      if (selectedJob?.matchId === job.matchId) {
+        setSelectedJob(null);
+      }
+    } catch (error) {
+      console.error('Error marking as not interested:', error);
+    } finally {
+      setMarkingNotInterested(null);
+    }
+  };
 
   // Refetch questions for the current questionnaire (used by realtime subscription)
   const refetchCurrentQuestions = async (questionnaireId: string) => {
@@ -1356,8 +1386,9 @@ export default function DashboardPage() {
 
       const { data: matchesData, error: matchesError } = await supabase
         .from('matches')
-        .select('job_id, questionnaire_sent')
-        .eq('user_id', user.id);
+        .select('match_id, job_id, questionnaire_sent, match_failed')
+        .eq('user_id', user.id)
+        .eq('match_failed', false);
 
       if (matchesError) {
         console.error('Error fetching matches:', matchesError);
@@ -1415,7 +1446,9 @@ export default function DashboardPage() {
             description: job.job_description,
             requirements: job.job_requirements,
             questionnaireId: job.questionnaire_id || null,
-            questionnaireSent: match.questionnaire_sent
+            questionnaireSent: match.questionnaire_sent,
+            matchId: match.match_id,
+            matchFailed: match.match_failed
           };
         })
         .filter(Boolean) as Job[];
@@ -1976,16 +2009,25 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {selectedJob.questionnaireSent && selectedJob.questionnaireId && (
-                    <div className="flex-shrink-0 p-6 pt-4 border-t border-slate-100">
+                  <div className="flex-shrink-0 p-6 pt-4 border-t border-slate-100">
+                    <div className="flex flex-col gap-3">
+                      {selectedJob.questionnaireSent && selectedJob.questionnaireId && (
+                        <button
+                          onClick={() => handleTakeQuestionnaire(selectedJob)}
+                          className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                        >
+                          Take Questionnaire
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleTakeQuestionnaire(selectedJob)}
-                        className="w-full bg-gradient-to-r from-sky-500 to-teal-500 text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                        onClick={() => handleNotInterested(selectedJob)}
+                        disabled={markingNotInterested === selectedJob.matchId}
+                        className="w-full text-slate-500 hover:text-slate-700 py-2 text-sm transition-colors disabled:opacity-50"
                       >
-                        Take Questionnaire
+                        {markingNotInterested === selectedJob.matchId ? 'Updating...' : 'Not interested in this position'}
                       </button>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
 

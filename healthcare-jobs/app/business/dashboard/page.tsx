@@ -27,6 +27,7 @@ interface MatchedCandidate {
   match_id: string;
   user_id: string;
   questionnaire_sent: boolean;
+  match_failed: boolean;
   candidate: {
     user_id: string;
     name: string;
@@ -1091,6 +1092,30 @@ function JobDetailModal({
   const [viewingResponsesFor, setViewingResponsesFor] = useState<MatchedCandidate | null>(null);
   const [candidateResponses, setCandidateResponses] = useState<{question: string; answer: string}[]>([]);
   const [loadingResponses, setLoadingResponses] = useState(false);
+  const [markingNotInterested, setMarkingNotInterested] = useState<string | null>(null);
+
+  // Handle "Not Interested" action for a candidate
+  const handleNotInterested = async (candidate: MatchedCandidate) => {
+    setMarkingNotInterested(candidate.match_id);
+    try {
+      const { error } = await supabase
+        .from('matches')
+        .update({ match_failed: true })
+        .eq('match_id', candidate.match_id);
+
+      if (error) throw error;
+
+      // Remove the candidate from local state
+      setCandidates(prev => prev.filter(c => c.match_id !== candidate.match_id));
+
+      // Notify parent to refresh match counts
+      onScreeningSent();
+    } catch (error) {
+      console.error('Error marking as not interested:', error);
+    } finally {
+      setMarkingNotInterested(null);
+    }
+  };
 
   useEffect(() => {
     if (job) {
@@ -1141,6 +1166,7 @@ function JobDetailModal({
           match_id,
           user_id,
           questionnaire_sent,
+          match_failed,
           u_candidates (
             user_id,
             name,
@@ -1148,7 +1174,8 @@ function JobDetailModal({
             resume
           )
         `)
-        .eq('job_id', job.job_id);
+        .eq('job_id', job.job_id)
+        .eq('match_failed', false);
 
       if (error) {
         console.error('Error fetching candidates:', error);
@@ -1159,6 +1186,7 @@ function JobDetailModal({
         match_id: match.match_id,
         user_id: match.user_id,
         questionnaire_sent: match.questionnaire_sent,
+        match_failed: match.match_failed,
         candidate: {
           user_id: match.u_candidates.user_id,
           name: match.u_candidates.name,
@@ -1622,6 +1650,20 @@ function JobDetailModal({
                             Send Screening
                           </span>
                         )}
+                        <button
+                          onClick={() => handleNotInterested(candidate)}
+                          disabled={markingNotInterested === candidate.match_id}
+                          className="px-3 py-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition text-sm disabled:opacity-50"
+                          title="Not interested in this candidate"
+                        >
+                          {markingNotInterested === candidate.match_id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-400"></div>
+                          ) : (
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1798,13 +1840,14 @@ export default function BusinessDashboardPage() {
         return;
       }
 
-      // Fetch match counts for each job
+      // Fetch match counts for each job (excluding failed matches)
       const jobsWithCounts = await Promise.all(
         (jobsData || []).map(async (job: Job) => {
           const { count } = await supabase
             .from('matches')
             .select('*', { count: 'exact', head: true })
-            .eq('job_id', job.job_id);
+            .eq('job_id', job.job_id)
+            .eq('match_failed', false);
 
           return {
             ...job,
