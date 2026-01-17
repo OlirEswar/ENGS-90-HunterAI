@@ -361,7 +361,148 @@ export default function DashboardPage() {
   const [submitting, setSubmitting] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left');
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [currentQuestionnaireId, setCurrentQuestionnaireId] = useState<string | null>(null);
 
+  // Refetch questions for the current questionnaire (used by realtime subscription)
+  const refetchCurrentQuestions = async (questionnaireId: string) => {
+    const { data: questionsData } = await supabase
+      .from('job_questions')
+      .select('*')
+      .eq('questionnaire_id', questionnaireId)
+      .order('position');
+
+    if (questionsData) {
+      setQuestions(questionsData);
+    }
+  };
+
+  // Subscribe to questionnaire changes when viewing a questionnaire
+  useEffect(() => {
+    if (!showQuestionnaire || !currentQuestionnaireId) return;
+
+    const questionnaireId = currentQuestionnaireId;
+
+    const channel = supabase
+      .channel(`questionnaire-changes-${questionnaireId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'job_questions'
+        },
+        (payload) => {
+          // Check if the change is for our questionnaire
+          const record = payload.new as { questionnaire_id?: string } | null;
+          const oldRecord = payload.old as { questionnaire_id?: string } | null;
+          if (record?.questionnaire_id === questionnaireId || oldRecord?.questionnaire_id === questionnaireId) {
+            refetchCurrentQuestions(questionnaireId);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [showQuestionnaire, currentQuestionnaireId]);
+
+  // Fetch jobs function - extracted so it can be called by realtime subscription
+  const fetchJobs = async () => {
+    try {
+      // Fetch matched jobs for the authenticated user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: matchesData, error: matchesError } = await supabase
+        .from('matches')
+        .select('job_id, questionnaire_sent')
+        .eq('user_id', user.id);
+
+      if (matchesError) {
+        console.error('Error fetching matches:', matchesError);
+        return;
+      }
+
+      const matchList = matchesData || [];
+      const jobIds = matchList.map((match: any) => match.job_id);
+
+      if (jobIds.length === 0) {
+        setJobs([]);
+        setScreeningInvitations([]);
+        setRegularMatches([]);
+        return;
+      }
+
+      const { data: jobsData, error: jobsError } = await supabase
+        .from('jobs_with_business')
+        .select(`
+          job_id,
+          job_name,
+          company_name,
+          city,
+          state,
+          hourly_wage_minimum,
+          hourly_wage_maximum,
+          job_description,
+          job_requirements,
+          questionnaire_id
+        `)
+        .in('job_id', jobIds);
+
+      if (jobsError) {
+        console.error('Error fetching jobs:', jobsError);
+        return;
+      }
+
+      const jobsById = new Map(
+        (jobsData || []).map((job: any) => [job.job_id, job])
+      );
+
+      // Transform the data to match the Job interface
+      const transformedJobs: Job[] = matchList
+        .map((match: any) => {
+          const job = jobsById.get(match.job_id);
+          if (!job) return null;
+          return {
+            id: job.job_id,
+            title: job.job_name,
+            company: job.company_name,
+            city: job.city,
+            state: job.state,
+            hourlyWageMin: parseFloat(job.hourly_wage_minimum),
+            hourlyWageMax: parseFloat(job.hourly_wage_maximum),
+            description: job.job_description,
+            requirements: job.job_requirements,
+            questionnaireId: job.questionnaire_id || null,
+            questionnaireSent: match.questionnaire_sent
+          };
+        })
+        .filter(Boolean) as Job[];
+
+      // Split jobs based on questionnaire_sent status
+      const screening: Job[] = [];
+      const regular: Job[] = [];
+
+      transformedJobs.forEach((job: Job) => {
+        if (job.questionnaireSent) {
+          screening.push(job);
+        } else {
+          regular.push(job);
+        }
+      });
+
+      setJobs(transformedJobs);
+      setScreeningInvitations(screening);
+      setRegularMatches(regular);
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial auth check and data fetch
   useEffect(() => {
     const checkAuthAndResume = async () => {
       // Check if user is authenticated
@@ -397,102 +538,73 @@ export default function DashboardPage() {
       fetchJobs();
     };
 
-    const fetchJobs = async () => {
-      try {
-        // Fetch matched jobs for the authenticated user
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: matchesData, error: matchesError } = await supabase
-          .from('matches')
-          .select('job_id, questionnaire_sent')
-          .eq('user_id', user.id);
-
-        if (matchesError) {
-          console.error('Error fetching matches:', matchesError);
-          return;
-        }
-
-        const matchList = matchesData || [];
-        const jobIds = matchList.map((match: any) => match.job_id);
-
-        if (jobIds.length === 0) {
-          setJobs([]);
-          setScreeningInvitations([]);
-          setRegularMatches([]);
-          return;
-        }
-
-        const { data: jobsData, error: jobsError } = await supabase
-          .from('jobs_with_business')
-          .select(`
-            job_id,
-            job_name,
-            company_name,
-            city,
-            state,
-            hourly_wage_minimum,
-            hourly_wage_maximum,
-            job_description,
-            job_requirements,
-            questionnaire_id
-          `)
-          .in('job_id', jobIds);
-
-        if (jobsError) {
-          console.error('Error fetching jobs:', jobsError);
-          return;
-        }
-
-        const jobsById = new Map(
-          (jobsData || []).map((job: any) => [job.job_id, job])
-        );
-
-        // Transform the data to match the Job interface
-        const transformedJobs: Job[] = matchList
-          .map((match: any) => {
-            const job = jobsById.get(match.job_id);
-            if (!job) return null;
-            return {
-              id: job.job_id,
-              title: job.job_name,
-              company: job.company_name,
-              city: job.city,
-              state: job.state,
-              hourlyWageMin: parseFloat(job.hourly_wage_minimum),
-              hourlyWageMax: parseFloat(job.hourly_wage_maximum),
-              description: job.job_description,
-              requirements: job.job_requirements,
-              questionnaireId: job.questionnaire_id || null,
-              questionnaireSent: match.questionnaire_sent
-            };
-          })
-          .filter(Boolean) as Job[];
-
-        // Split jobs based on questionnaire_sent status
-        const screening: Job[] = [];
-        const regular: Job[] = [];
-
-        transformedJobs.forEach((job: Job) => {
-          if (job.questionnaireSent) {
-            screening.push(job);
-          } else {
-            regular.push(job);
-          }
-        });
-
-        setJobs(transformedJobs);
-        setScreeningInvitations(screening);
-        setRegularMatches(regular);
-      } catch (error) {
-        console.error('Error fetching jobs:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     checkAuthAndResume();
   }, [router]);
+
+  // Subscribe to job and questionnaire changes to keep data fresh
+  useEffect(() => {
+    // Get the job IDs we're interested in
+    const jobIds = jobs.map(job => job.id);
+    const questionnaireIds = jobs.map(job => job.questionnaireId).filter(Boolean) as string[];
+
+    if (jobIds.length === 0) return;
+
+    const channel = supabase
+      .channel('dashboard-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'jobs'
+        },
+        (payload) => {
+          // Check if the change affects any of our matched jobs
+          const record = payload.new as { job_id?: string } | null;
+          const oldRecord = payload.old as { job_id?: string } | null;
+          if (jobIds.includes(record?.job_id || '') || jobIds.includes(oldRecord?.job_id || '')) {
+            fetchJobs();
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'job_questions'
+        },
+        (payload) => {
+          // Check if the change affects any of our questionnaires
+          const record = payload.new as { questionnaire_id?: string } | null;
+          const oldRecord = payload.old as { questionnaire_id?: string } | null;
+          if (questionnaireIds.includes(record?.questionnaire_id || '') || questionnaireIds.includes(oldRecord?.questionnaire_id || '')) {
+            fetchJobs();
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'matches'
+        },
+        (payload) => {
+          // Check if the change affects any of our matched jobs
+          const record = payload.new as { job_id?: string } | null;
+          const oldRecord = payload.old as { job_id?: string } | null;
+          if (jobIds.includes(record?.job_id || '') || jobIds.includes(oldRecord?.job_id || '')) {
+            fetchJobs();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [jobs]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -536,6 +648,7 @@ export default function DashboardPage() {
         });
       }
       setAnswers(answersMap);
+      setCurrentQuestionnaireId(job.questionnaireId);
       setSlideDirection('left');
       setShowQuestionnaire(true);
     } catch (error) {
@@ -614,6 +727,7 @@ export default function DashboardPage() {
     setSelectedJob(null);
     setShowQuestionnaire(false);
     setShowCongratulations(false);
+    setCurrentQuestionnaireId(null);
     setAnswers({});
     setValidationError(null);
   };
