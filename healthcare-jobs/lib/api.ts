@@ -287,3 +287,72 @@ export async function updateUserProfile(userId: string, data: Partial<UserProfil
     return { success: true };
   }
 }
+
+// Chat API functions
+
+export interface ChatMessage {
+  role: 'assistant' | 'user';
+  content: string;
+}
+
+/**
+ * Initializes the AI chat by fetching and parsing the user's resume,
+ * then getting Carey's opening message from OpenAI.
+ */
+export async function startChat(accessToken: string, userId: string): Promise<{ message: string; resumeText: string }> {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'start', accessToken, userId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to start chat');
+  }
+
+  return response.json();
+}
+
+/**
+ * Sends a message in the ongoing chat conversation and gets Carey's response.
+ */
+export async function sendChatMessage(
+  messages: ChatMessage[],
+  resumeText: string
+): Promise<{ message: string }> {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'message', messages, resumeText }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to send message');
+  }
+
+  return response.json();
+}
+
+/**
+ * Generates a summary of the chat conversation and stores it in the DB.
+ */
+export async function summarizeChat(
+  messages: ChatMessage[],
+  accessToken: string,
+  userId: string
+): Promise<{ summary: string }> {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'summarize', messages, accessToken, userId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to generate summary');
+  }
+
+  return response.json();
+}

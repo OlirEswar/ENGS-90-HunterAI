@@ -254,7 +254,7 @@ export default function PreferencesPage() {
 
             <div className="flex gap-4 pt-4">
               <Link
-                href="/signup/questionnaire"
+                href="/signup/chat"
                 className="flex-1 px-6 py-3 rounded-lg border-2 border-slate-300 text-slate-700 font-semibold text-center hover:bg-slate-50 transition"
               >
                 Back

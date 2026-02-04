@@ -315,11 +315,11 @@ export default function QuestionnairePage() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      // Store in sessionStorage for the preferences page to pick up
+      // Store in sessionStorage for the chat/preferences page to pick up
       sessionStorage.setItem('signupData', JSON.stringify({ profile: formData }));
       // Clear the localStorage progress since we're moving forward
       localStorage.removeItem(STORAGE_KEY);
-      router.push('/signup/preferences');
+      router.push('/signup/chat');
     } catch (error) {
       console.error('Error:', error);
     } finally {
