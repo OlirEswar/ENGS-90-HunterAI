@@ -1,3 +1,66 @@
+// Polyfill DOMMatrix for serverless environments (Vercel) where browser APIs are missing.
+// pdfjs-dist (used by pdf-parse) references DOMMatrix at load time.
+if (typeof globalThis.DOMMatrix === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).DOMMatrix = class DOMMatrix {
+    a: number; b: number; c: number; d: number; e: number; f: number;
+    m11: number; m12: number; m13 = 0; m14 = 0;
+    m21: number; m22: number; m23 = 0; m24 = 0;
+    m31 = 0; m32 = 0; m33 = 1; m34 = 0;
+    m41: number; m42: number; m43 = 0; m44 = 1;
+    is2D = true;
+
+    constructor(init?: number[] | Float32Array | Float64Array) {
+      const v = init && init.length >= 6 ? Array.from(init) : [1, 0, 0, 1, 0, 0];
+      this.a = this.m11 = v[0];
+      this.b = this.m12 = v[1];
+      this.c = this.m21 = v[2];
+      this.d = this.m22 = v[3];
+      this.e = this.m41 = v[4];
+      this.f = this.m42 = v[5];
+      if (init && init.length === 16) {
+        this.is2D = false;
+        this.m13 = v[2]; this.m14 = v[3];
+        this.m21 = v[4]; this.m22 = v[5]; this.m23 = v[6]; this.m24 = v[7];
+        this.m31 = v[8]; this.m32 = v[9]; this.m33 = v[10]; this.m34 = v[11];
+        this.m41 = v[12]; this.m42 = v[13]; this.m43 = v[14]; this.m44 = v[15];
+        this.a = v[0]; this.b = v[1]; this.c = v[4]; this.d = v[5]; this.e = v[12]; this.f = v[13];
+      }
+    }
+
+    static fromMatrix(other: any) { return new DOMMatrix([other.a, other.b, other.c, other.d, other.e, other.f]); }
+    static fromFloat32Array(a: Float32Array) { return new DOMMatrix(Array.from(a)); }
+    static fromFloat64Array(a: Float64Array) { return new DOMMatrix(Array.from(a)); }
+
+    inverse() {
+      const det = this.a * this.d - this.b * this.c;
+      if (det === 0) return new DOMMatrix([0, 0, 0, 0, 0, 0]);
+      return new DOMMatrix([
+        this.d / det, -this.b / det,
+        -this.c / det, this.a / det,
+        (this.c * this.f - this.d * this.e) / det,
+        (this.b * this.e - this.a * this.f) / det,
+      ]);
+    }
+
+    multiply(other: any) {
+      return new DOMMatrix([
+        this.a * other.a + this.c * other.b,
+        this.b * other.a + this.d * other.b,
+        this.a * other.c + this.c * other.d,
+        this.b * other.c + this.d * other.d,
+        this.a * other.e + this.c * other.f + this.e,
+        this.b * other.e + this.d * other.f + this.f,
+      ]);
+    }
+
+    transformPoint(point?: { x?: number; y?: number }) {
+      const x = point?.x ?? 0, y = point?.y ?? 0;
+      return { x: this.a * x + this.c * y + this.e, y: this.b * x + this.d * y + this.f, z: 0, w: 1 };
+    }
+  };
+}
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
