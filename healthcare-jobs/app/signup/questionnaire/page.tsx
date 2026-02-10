@@ -70,6 +70,7 @@ interface Certification {
 
 interface FormData {
   // Identity & Work Authorization
+  location: string;
   work_authorized: boolean | null;
   requires_sponsorship: boolean | null;
 
@@ -142,6 +143,7 @@ const SECTIONS = [
 const STORAGE_KEY = 'healthcareHunterProfileData';
 
 const defaultFormData: FormData = {
+  location: '',
   work_authorized: null,
   requires_sponsorship: null,
   certifications: [],
@@ -330,7 +332,7 @@ export default function QuestionnairePage() {
   const validateCurrentSection = (): boolean => {
     switch (SECTIONS[currentSection].id) {
       case 'authorization':
-        return formData.work_authorized !== null && formData.requires_sponsorship !== null;
+        return formData.location.trim() !== '' && formData.work_authorized !== null && formData.requires_sponsorship !== null;
       case 'certifications':
         // Check that all selected certifications have either an expiration date or "does not expire" checked
         const allCertsValid = formData.certifications.every(cert =>
@@ -429,6 +431,19 @@ export default function QuestionnairePage() {
       case 'authorization':
         return (
           <div className="space-y-8">
+            <div className="space-y-4">
+              <label className="block text-lg font-medium text-slate-800">
+                Where are you located?
+              </label>
+              <input
+                type="text"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
+                placeholder="e.g., New York, NY"
+              />
+            </div>
+
             <div className="space-y-4">
               <label className="block text-lg font-medium text-slate-800">
                 Are you legally authorized to work in the United States?

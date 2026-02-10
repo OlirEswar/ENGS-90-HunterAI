@@ -172,6 +172,7 @@ export default function ChatPage() {
     // Store chat conversation in session storage for downstream use
     const signupData = sessionStorage.getItem('signupData');
     const existingData = signupData ? JSON.parse(signupData) : {};
+    const profileData = existingData.profile || {};
 
     sessionStorage.setItem('signupData', JSON.stringify({
       ...existingData,
@@ -197,7 +198,66 @@ export default function ChatPage() {
       }
     }
 
-    router.push('/signup/preferences');
+    // Save all questionnaire profile data and mark profile as completed
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      const updateData: Record<string, any> = {
+        profile_completed: true,
+        location: profileData.location,
+        work_authorized: profileData.work_authorized,
+        requires_sponsorship: profileData.requires_sponsorship,
+        certifications: profileData.certifications || [],
+        years_experience: profileData.years_experience,
+        work_settings: profileData.work_settings || [],
+        has_transportation: profileData.has_transportation,
+        willing_to_travel: profileData.willing_to_travel,
+        max_commute: profileData.max_commute,
+        preferred_shifts: profileData.preferred_shifts || [],
+        willing_to_rotate: profileData.willing_to_rotate,
+        schedule_type: profileData.schedule_type || [],
+        hours_per_week: profileData.hours_per_week,
+        start_availability: profileData.start_availability,
+        work_type_preference: profileData.work_type_preference,
+        environment_preferences: profileData.environment_preferences || [],
+        location_preference: profileData.location_preference,
+        enjoys_patient_interaction: profileData.enjoys_patient_interaction,
+        enjoys_teamwork: profileData.enjoys_teamwork,
+        comfortable_with_families: profileData.comfortable_with_families,
+        handles_emotions: profileData.handles_emotions,
+        prefers_routine: profileData.prefers_routine,
+        works_independently: profileData.works_independently,
+        likes_fast_paced: profileData.likes_fast_paced,
+        stays_calm: profileData.stays_calm,
+        handles_distress: profileData.handles_distress,
+        job_priorities: profileData.job_priorities || [],
+        can_stand_long: profileData.can_stand_long,
+        can_lift_50: profileData.can_lift_50,
+        comfortable_assisting: profileData.comfortable_assisting || [],
+        additional_info: profileData.additional_info || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: updateError } = await supabase
+        .from('u_candidates')
+        .update(updateData)
+        .eq('user_id', user.id);
+
+      if (updateError) {
+        console.error('Error updating profile:', updateError);
+      }
+
+      // Clear session storage
+      sessionStorage.removeItem('signupData');
+    } catch (err) {
+      console.error('Error saving profile:', err);
+    }
+
+    router.push('/dashboard');
   };
 
   const totalQuestions = 8; // approximate middle of 6-10 range
