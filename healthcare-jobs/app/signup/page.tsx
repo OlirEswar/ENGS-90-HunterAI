@@ -11,6 +11,7 @@ export default function SignUpPage() {
     firstName: '',
     lastName: '',
     email: '',
+    phoneNumber: '',
     password: '',
     confirmPassword: '',
   });
@@ -80,6 +81,7 @@ export default function SignUpPage() {
         .from('u_candidates')
         .update({
           name: `${formData.firstName} ${formData.lastName}`,
+          phone_number: formData.phoneNumber,
         })
         .eq('user_id', authData.user.id);
 
@@ -168,6 +170,22 @@ export default function SignUpPage() {
                 onChange={handleChange}
                 className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
                 placeholder="you@example.com"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="phoneNumber" className="block text-sm font-medium text-slate-700 mb-2">
+                Phone Number
+              </label>
+              <input
+                id="phoneNumber"
+                name="phoneNumber"
+                type="tel"
+                required
+                value={formData.phoneNumber}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition"
+                placeholder="(555) 123-4567"
               />
             </div>
 
